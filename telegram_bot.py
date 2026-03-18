@@ -62,6 +62,8 @@ Se a solicitação estiver incompleta, pergunte pelo que falta:
 8. Use historico_precos para ver como o preço mudou ao longo do tempo
 9. Use buscar_por_cidade para ranking de cidades por preço médio
 10. Use resumo_estatisticas para dados gerais sobre a base
+11. Use adicionar_watchlist para monitorar um hotel (requer hotel_id, checkin, checkout)
+12. Use remover_watchlist para parar de monitorar (requer watch_id do buscar_watchlist)
 
 ### Fase 3: Apresentação
 - Valores sempre em R$ (BRL)
@@ -193,6 +195,32 @@ TOOLS = [
             "properties": {},
         },
     },
+    {
+        "name": "adicionar_watchlist",
+        "description": "Adiciona um hotel à watchlist de monitoramento de preços. O sistema notifica quando o preço mudar.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "hotel_external_id": {"type": "string", "description": "ID externo do hotel"},
+                "data_checkin": {"type": "string", "description": "Data início do monitoramento (YYYY-MM-DD)"},
+                "data_checkout": {"type": "string", "description": "Data fim do monitoramento (YYYY-MM-DD)"},
+                "label": {"type": "string", "description": "Rótulo opcional (ex: 'Férias família', 'Viagem trabalho')"},
+                "preco_alvo": {"type": "number", "description": "Preço alvo da diária em R$ (opcional, notifica quando atingir)"},
+            },
+            "required": ["hotel_external_id", "data_checkin", "data_checkout"],
+        },
+    },
+    {
+        "name": "remover_watchlist",
+        "description": "Remove um hotel da watchlist de monitoramento. Use buscar_watchlist primeiro para ver os itens e IDs.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "watch_id": {"type": "integer", "description": "ID do item na watchlist (obtido via buscar_watchlist)"},
+            },
+            "required": ["watch_id"],
+        },
+    },
 ]
 
 
@@ -317,7 +345,7 @@ def tool_buscar_watchlist() -> str:
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT h.name, w.date_start, w.date_end, w.label, w.target_price,
+                SELECT w.id, h.name, h.external_id, w.date_start, w.date_end, w.label, w.target_price, w.notify,
                        (SELECT min(d.amount) FROM hotel_diarias d
                         WHERE d.hotel_id = h.id AND d.date BETWEEN w.date_start AND w.date_end AND d.amount > 0),
                        (SELECT avg(d.amount)::numeric(10,2) FROM hotel_diarias d
@@ -333,10 +361,12 @@ def tool_buscar_watchlist() -> str:
 
     return _json([
         {
-            "hotel": r[0], "checkin": r[1], "checkout": r[2], "label": r[3],
-            "preco_alvo": float(r[4]) if r[4] else None,
-            "menor_preco": float(r[5]) if r[5] else None,
-            "preco_medio": float(r[6]) if r[6] else None,
+            "watch_id": r[0], "hotel": r[1], "external_id": r[2],
+            "checkin": r[3], "checkout": r[4], "label": r[5],
+            "preco_alvo": float(r[6]) if r[6] else None,
+            "notificacoes": r[7],
+            "menor_preco": float(r[8]) if r[8] else None,
+            "preco_medio": float(r[9]) if r[9] else None,
         }
         for r in rows
     ])
@@ -563,6 +593,66 @@ def tool_resumo_estatisticas() -> str:
     })
 
 
+def tool_adicionar_watchlist(hotel_external_id: str, data_checkin: str, data_checkout: str,
+                             label: str = None, preco_alvo: float = None) -> str:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id, name FROM hotels WHERE external_id = %s", (hotel_external_id,))
+            hotel = cur.fetchone()
+            if not hotel:
+                return _json({"erro": f"Hotel {hotel_external_id} não encontrado."})
+
+            hotel_id, hotel_name = hotel
+
+            cur.execute("""
+                INSERT INTO watched_hotels (hotel_id, date_start, date_end, label, target_price, notify)
+                VALUES (%s, %s, %s, %s, %s, true)
+                ON CONFLICT (hotel_id, date_start, date_end) DO UPDATE SET
+                    label = EXCLUDED.label,
+                    target_price = EXCLUDED.target_price,
+                    notify = true,
+                    updated_at = now()
+                RETURNING id
+            """, (hotel_id, data_checkin, data_checkout, label, preco_alvo))
+            watch_id = cur.fetchone()[0]
+            conn.commit()
+
+    return _json({
+        "status": "adicionado",
+        "watch_id": watch_id,
+        "hotel": hotel_name,
+        "checkin": data_checkin,
+        "checkout": data_checkout,
+        "label": label,
+        "preco_alvo": preco_alvo,
+    })
+
+
+def tool_remover_watchlist(watch_id: int) -> str:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT w.id, h.name, w.date_start, w.date_end
+                FROM watched_hotels w JOIN hotels h ON w.hotel_id = h.id
+                WHERE w.id = %s
+            """, (watch_id,))
+            row = cur.fetchone()
+            if not row:
+                return _json({"erro": f"Item {watch_id} não encontrado na watchlist."})
+
+            hotel_name, date_start, date_end = row[1], row[2], row[3]
+            cur.execute("DELETE FROM watched_hotels WHERE id = %s", (watch_id,))
+            conn.commit()
+
+    return _json({
+        "status": "removido",
+        "watch_id": watch_id,
+        "hotel": hotel_name,
+        "checkin": str(date_start),
+        "checkout": str(date_end),
+    })
+
+
 TOOL_DISPATCH = {
     "buscar_hoteis": tool_buscar_hoteis,
     "buscar_diarias": tool_buscar_diarias,
@@ -574,6 +664,8 @@ TOOL_DISPATCH = {
     "historico_precos": tool_historico_precos,
     "buscar_por_cidade": tool_buscar_por_cidade,
     "resumo_estatisticas": tool_resumo_estatisticas,
+    "adicionar_watchlist": tool_adicionar_watchlist,
+    "remover_watchlist": tool_remover_watchlist,
 }
 
 
