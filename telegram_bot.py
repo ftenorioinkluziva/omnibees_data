@@ -56,6 +56,12 @@ Se a solicitação estiver incompleta, pergunte pelo que falta:
 2. Use buscar_diarias para obter os preços do período
 3. Use buscar_padroes para análise de dia da semana / tendência
 4. Use buscar_watchlist para ver hotéis monitorados
+5. Use comparar_hoteis para comparar 2-3 hotéis no mesmo período
+6. Use hotel_detalhes para informações completas (amenities, quartos, descrição)
+7. Use buscar_mais_baratos para encontrar os hotéis mais baratos de uma região/período
+8. Use historico_precos para ver como o preço mudou ao longo do tempo
+9. Use buscar_por_cidade para ranking de cidades por preço médio
+10. Use resumo_estatisticas para dados gerais sobre a base
 
 ### Fase 3: Apresentação
 - Valores sempre em R$ (BRL)
@@ -112,6 +118,76 @@ TOOLS = [
     {
         "name": "buscar_watchlist",
         "description": "Lista hotéis na watchlist de monitoramento com preços agregados.",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+        },
+    },
+    {
+        "name": "comparar_hoteis",
+        "description": "Compara preços de 2 ou 3 hotéis lado a lado no mesmo período. Retorna total, média e menor diária de cada um.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "hotel_ids": {"type": "string", "description": "IDs externos separados por vírgula (ex: '9098,2281,1234')"},
+                "data_checkin": {"type": "string", "description": "Data de check-in (YYYY-MM-DD)"},
+                "data_checkout": {"type": "string", "description": "Data de check-out (YYYY-MM-DD)"},
+            },
+            "required": ["hotel_ids", "data_checkin", "data_checkout"],
+        },
+    },
+    {
+        "name": "hotel_detalhes",
+        "description": "Retorna informações completas de um hotel: descrição, amenities, check-in/out, tipos de quarto, estrelas, endereço.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "hotel_external_id": {"type": "string", "description": "ID externo do hotel"},
+            },
+            "required": ["hotel_external_id"],
+        },
+    },
+    {
+        "name": "buscar_mais_baratos",
+        "description": "Encontra os hotéis mais baratos de uma cidade, estado ou em todo o Brasil para um período específico.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "cidade": {"type": "string", "description": "Cidade (opcional)"},
+                "estado": {"type": "string", "description": "UF do estado (opcional, ex: SP, RJ)"},
+                "data_checkin": {"type": "string", "description": "Data de check-in (YYYY-MM-DD)"},
+                "data_checkout": {"type": "string", "description": "Data de check-out (YYYY-MM-DD)"},
+                "limite": {"type": "integer", "description": "Quantidade de resultados (padrão: 5)"},
+            },
+            "required": ["data_checkin", "data_checkout"],
+        },
+    },
+    {
+        "name": "historico_precos",
+        "description": "Mostra o histórico de mudanças de preço de um hotel — quando subiu, quando baixou, e quanto variou.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "hotel_external_id": {"type": "string", "description": "ID externo do hotel"},
+                "limite": {"type": "integer", "description": "Quantidade de mudanças recentes (padrão: 15)"},
+            },
+            "required": ["hotel_external_id"],
+        },
+    },
+    {
+        "name": "buscar_por_cidade",
+        "description": "Ranking de cidades por preço médio de diária, quantidade de hotéis e melhor custo-benefício. Use para comparar destinos.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "estado": {"type": "string", "description": "Filtrar por UF (opcional, ex: BA, SC)"},
+                "limite": {"type": "integer", "description": "Quantidade de cidades (padrão: 10)"},
+            },
+        },
+    },
+    {
+        "name": "resumo_estatisticas",
+        "description": "Retorna estatísticas gerais da base: total de hotéis, diárias, cidades, cobertura de datas, hotéis monitorados.",
         "parameters": {
             "type": "object",
             "properties": {},
@@ -266,11 +342,238 @@ def tool_buscar_watchlist() -> str:
     ])
 
 
+def tool_comparar_hoteis(hotel_ids: str, data_checkin: str, data_checkout: str) -> str:
+    ids = [x.strip() for x in hotel_ids.split(",") if x.strip()]
+    if len(ids) < 2 or len(ids) > 5:
+        return _json({"erro": "Informe entre 2 e 5 IDs de hotéis separados por vírgula."})
+
+    resultados = []
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            for ext_id in ids:
+                cur.execute("SELECT id, name, city, stars FROM hotels WHERE external_id = %s", (ext_id,))
+                hotel = cur.fetchone()
+                if not hotel:
+                    resultados.append({"external_id": ext_id, "erro": "Hotel não encontrado"})
+                    continue
+
+                hotel_id, name, city, stars = hotel
+                cur.execute("""
+                    SELECT date, amount FROM hotel_diarias
+                    WHERE hotel_id = %s AND date >= %s AND date < %s AND amount > 0
+                    ORDER BY date
+                """, (hotel_id, data_checkin, data_checkout))
+                rows = cur.fetchall()
+
+                if not rows:
+                    resultados.append({"hotel": name, "cidade": city, "estrelas": stars, "noites": 0, "total": 0})
+                    continue
+
+                valores = [float(r[1]) for r in rows]
+                resultados.append({
+                    "hotel": name, "cidade": city, "estrelas": stars,
+                    "noites": len(valores), "total": round(sum(valores), 2),
+                    "media_diaria": round(sum(valores) / len(valores), 2),
+                    "menor_diaria": round(min(valores), 2),
+                    "maior_diaria": round(max(valores), 2),
+                })
+
+    return _json({"checkin": data_checkin, "checkout": data_checkout, "comparacao": resultados})
+
+
+def tool_hotel_detalhes(hotel_external_id: str) -> str:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT h.name, h.city, h.state, h.stars, h.address, h.zip_code,
+                       h.description, h.check_in, h.check_out, h.amenities, h.room_types,
+                       h.latitude, h.longitude, c.name as chain, c.email, c.phone
+                FROM hotels h
+                LEFT JOIN chains c ON h.chain_id = c.id
+                WHERE h.external_id = %s
+            """, (hotel_external_id,))
+            r = cur.fetchone()
+            if not r:
+                return _json({"erro": f"Hotel {hotel_external_id} não encontrado."})
+
+    amenities = r[9] if r[9] else []
+    room_types = r[10] if r[10] else []
+
+    if isinstance(amenities, str):
+        try:
+            amenities = json.loads(amenities)
+        except (json.JSONDecodeError, TypeError):
+            amenities = []
+
+    if isinstance(room_types, str):
+        try:
+            room_types = json.loads(room_types)
+        except (json.JSONDecodeError, TypeError):
+            room_types = []
+
+    return _json({
+        "hotel": r[0], "cidade": r[1], "estado": r[2], "estrelas": r[3],
+        "endereco": r[4], "cep": r[5], "descricao": r[6],
+        "check_in": r[7], "check_out": r[8],
+        "amenities": amenities[:30] if isinstance(amenities, list) else amenities,
+        "tipos_quarto": room_types[:10] if isinstance(room_types, list) else room_types,
+        "latitude": float(r[11]) if r[11] else None,
+        "longitude": float(r[12]) if r[12] else None,
+        "rede": r[13], "email": r[14], "telefone": r[15],
+    })
+
+
+def tool_buscar_mais_baratos(data_checkin: str, data_checkout: str, cidade=None, estado=None, limite: int = 5) -> str:
+    conditions = ["d.date >= %s", "d.date < %s", "d.amount > 0"]
+    params = [data_checkin, data_checkout]
+
+    if cidade:
+        conditions.append("h.city ILIKE %s")
+        params.append(f"%{cidade}%")
+    if estado:
+        conditions.append("h.state ILIKE %s")
+        params.append(f"%{estado}%")
+
+    limite = min(limite or 5, 10)
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(f"""
+                SELECT h.external_id, h.name, h.city, h.state, h.stars,
+                       sum(d.amount)::numeric(10,2) as total,
+                       avg(d.amount)::numeric(10,2) as media,
+                       min(d.amount)::numeric(10,2) as menor,
+                       count(*) as noites
+                FROM hotel_diarias d
+                JOIN hotels h ON d.hotel_id = h.id
+                WHERE {' AND '.join(conditions)}
+                GROUP BY h.id, h.external_id, h.name, h.city, h.state, h.stars
+                HAVING count(*) >= 1
+                ORDER BY total ASC
+                LIMIT %s
+            """, params + [limite])
+            rows = cur.fetchall()
+
+    if not rows:
+        return _json({"resultado": "Nenhum hotel encontrado com disponibilidade nesse período."})
+
+    return _json({
+        "checkin": data_checkin, "checkout": data_checkout,
+        "filtro_cidade": cidade, "filtro_estado": estado,
+        "hoteis": [
+            {"external_id": r[0], "hotel": r[1], "cidade": r[2], "estado": r[3], "estrelas": r[4],
+             "total": float(r[5]), "media_diaria": float(r[6]), "menor_diaria": float(r[7]), "noites": r[8]}
+            for r in rows
+        ],
+    })
+
+
+def tool_historico_precos(hotel_external_id: str, limite: int = 15) -> str:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id, name FROM hotels WHERE external_id = %s", (hotel_external_id,))
+            hotel = cur.fetchone()
+            if not hotel:
+                return _json({"erro": f"Hotel {hotel_external_id} não encontrado."})
+
+            hotel_id, hotel_name = hotel
+            cur.execute("""
+                SELECT d.date, h.amount as preco_anterior, d.amount as preco_atual, h.captured_at
+                FROM hotel_precos_historico h
+                JOIN hotel_diarias d ON h.hotel_diaria_id = d.id
+                WHERE d.hotel_id = %s
+                ORDER BY h.captured_at DESC
+                LIMIT %s
+            """, (hotel_id, min(limite or 15, 30)))
+            rows = cur.fetchall()
+
+    if not rows:
+        return _json({"hotel": hotel_name, "resultado": "Sem histórico de mudanças de preço."})
+
+    changes = []
+    for r in rows:
+        old, new = float(r[1]), float(r[2])
+        pct = ((new - old) / old) * 100 if old else 0
+        changes.append({
+            "data_diaria": r[0].isoformat(), "preco_anterior": old, "preco_atual": new,
+            "variacao_pct": round(pct, 1), "capturado_em": r[3].isoformat() if r[3] else None,
+        })
+
+    return _json({"hotel": hotel_name, "mudancas": changes})
+
+
+def tool_buscar_por_cidade(estado=None, limite: int = 10) -> str:
+    conditions = ["d.amount > 0", "d.date >= CURRENT_DATE", "h.city IS NOT NULL"]
+    params = []
+
+    if estado:
+        conditions.append("h.state ILIKE %s")
+        params.append(f"%{estado}%")
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(f"""
+                SELECT h.city, h.state, count(DISTINCT h.id) as qtd_hoteis,
+                       avg(d.amount)::numeric(10,2) as preco_medio,
+                       min(d.amount)::numeric(10,2) as menor_preco
+                FROM hotel_diarias d
+                JOIN hotels h ON d.hotel_id = h.id
+                WHERE {' AND '.join(conditions)}
+                GROUP BY h.city, h.state
+                HAVING count(DISTINCT h.id) >= 2
+                ORDER BY preco_medio ASC
+                LIMIT %s
+            """, params + [min(limite or 10, 20)])
+            rows = cur.fetchall()
+
+    if not rows:
+        return _json({"resultado": "Nenhuma cidade encontrada com dados suficientes."})
+
+    return _json([
+        {"cidade": r[0], "estado": r[1], "qtd_hoteis": r[2],
+         "preco_medio": float(r[3]), "menor_preco": float(r[4])}
+        for r in rows
+    ])
+
+
+def tool_resumo_estatisticas() -> str:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT
+                    (SELECT count(*) FROM chains),
+                    (SELECT count(*) FROM hotels),
+                    (SELECT count(*) FROM hotel_diarias),
+                    (SELECT count(*) FROM hotel_precos_historico),
+                    (SELECT count(*) FROM watched_hotels),
+                    (SELECT count(DISTINCT city) FROM hotels WHERE city IS NOT NULL),
+                    (SELECT count(DISTINCT state) FROM hotels WHERE state IS NOT NULL),
+                    (SELECT min(date) FROM hotel_diarias),
+                    (SELECT max(date) FROM hotel_diarias),
+                    (SELECT count(DISTINCT hotel_id) FROM hotel_diarias)
+            """)
+            r = cur.fetchone()
+
+    return _json({
+        "redes_hoteleiras": r[0], "hoteis": r[1], "diarias_cadastradas": r[2],
+        "mudancas_preco_registradas": r[3], "hoteis_monitorados": r[4],
+        "cidades": r[5], "estados": r[6],
+        "periodo_cobertura": f"{r[7]} a {r[8]}",
+        "hoteis_com_preco": r[9],
+    })
+
+
 TOOL_DISPATCH = {
     "buscar_hoteis": tool_buscar_hoteis,
     "buscar_diarias": tool_buscar_diarias,
     "buscar_padroes": tool_buscar_padroes,
     "buscar_watchlist": tool_buscar_watchlist,
+    "comparar_hoteis": tool_comparar_hoteis,
+    "hotel_detalhes": tool_hotel_detalhes,
+    "buscar_mais_baratos": tool_buscar_mais_baratos,
+    "historico_precos": tool_historico_precos,
+    "buscar_por_cidade": tool_buscar_por_cidade,
+    "resumo_estatisticas": tool_resumo_estatisticas,
 }
 
 
