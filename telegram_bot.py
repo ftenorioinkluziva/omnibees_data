@@ -64,6 +64,8 @@ Se a solicitação estiver incompleta, pergunte pelo que falta:
 10. Use resumo_estatisticas para dados gerais sobre a base
 11. Use adicionar_watchlist para monitorar um hotel (requer hotel_id, checkin, checkout)
 12. Use remover_watchlist para parar de monitorar (requer watch_id do buscar_watchlist)
+13. Use sugerir_datas para encontrar as datas mais baratas de um hotel em um mês
+14. Use recomendar_hoteis para sugerir hotéis por perfil (familia, casal, negocios, economico)
 
 ### Fase 3: Apresentação
 - Valores sempre em R$ (BRL)
@@ -219,6 +221,37 @@ TOOLS = [
                 "watch_id": {"type": "integer", "description": "ID do item na watchlist (obtido via buscar_watchlist)"},
             },
             "required": ["watch_id"],
+        },
+    },
+    {
+        "name": "sugerir_datas",
+        "description": "Encontra as datas mais baratas para um hotel em um mês específico. Retorna os top N dias com menor diária.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "hotel_external_id": {"type": "string", "description": "ID externo do hotel"},
+                "mes": {"type": "integer", "description": "Mês (1-12)"},
+                "ano": {"type": "integer", "description": "Ano (ex: 2026)"},
+                "noites": {"type": "integer", "description": "Quantidade de noites desejadas (padrão: 3)"},
+                "limite": {"type": "integer", "description": "Quantidade de sugestões (padrão: 5)"},
+            },
+            "required": ["hotel_external_id", "mes", "ano"],
+        },
+    },
+    {
+        "name": "recomendar_hoteis",
+        "description": "Recomenda hotéis por perfil de viagem (família, casal, negócios) usando amenities, estrelas e preço. Pode filtrar por cidade/estado.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "perfil": {"type": "string", "description": "Perfil: 'familia', 'casal', 'negocios' ou 'economico'"},
+                "cidade": {"type": "string", "description": "Cidade (opcional)"},
+                "estado": {"type": "string", "description": "UF do estado (opcional)"},
+                "data_checkin": {"type": "string", "description": "Data de check-in (YYYY-MM-DD, opcional)"},
+                "data_checkout": {"type": "string", "description": "Data de check-out (YYYY-MM-DD, opcional)"},
+                "limite": {"type": "integer", "description": "Quantidade de resultados (padrão: 5)"},
+            },
+            "required": ["perfil"],
         },
     },
 ]
@@ -653,6 +686,150 @@ def tool_remover_watchlist(watch_id: int) -> str:
     })
 
 
+def tool_sugerir_datas(hotel_external_id: str, mes: int, ano: int, noites: int = 3, limite: int = 5) -> str:
+    noites = max(1, min(noites or 3, 14))
+    limite = min(limite or 5, 10)
+
+    month_start = f"{ano}-{mes:02d}-01"
+    if mes == 12:
+        month_end = f"{ano + 1}-01-01"
+    else:
+        month_end = f"{ano}-{mes + 1:02d}-01"
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id, name FROM hotels WHERE external_id = %s", (hotel_external_id,))
+            hotel = cur.fetchone()
+            if not hotel:
+                return _json({"erro": f"Hotel {hotel_external_id} não encontrado."})
+
+            hotel_id, hotel_name = hotel
+
+            cur.execute("""
+                SELECT date, amount
+                FROM hotel_diarias
+                WHERE hotel_id = %s AND date >= %s AND date < %s AND amount > 0
+                ORDER BY date
+            """, (hotel_id, month_start, month_end))
+            rows = cur.fetchall()
+
+    if len(rows) < noites:
+        return _json({"hotel": hotel_name, "resultado": f"Dados insuficientes para {mes:02d}/{ano}."})
+
+    prices = [(r[0], float(r[1])) for r in rows]
+
+    windows = []
+    for i in range(len(prices) - noites + 1):
+        window = prices[i:i + noites]
+        total = sum(p[1] for p in window)
+        windows.append({
+            "checkin": window[0][0].isoformat(),
+            "checkout": window[-1][0].isoformat(),
+            "noites": noites,
+            "total": round(total, 2),
+            "media_diaria": round(total / noites, 2),
+        })
+
+    windows.sort(key=lambda w: w["total"])
+
+    return _json({
+        "hotel": hotel_name,
+        "mes": f"{mes:02d}/{ano}",
+        "noites": noites,
+        "sugestoes": windows[:limite],
+    })
+
+
+PROFILE_AMENITY_KEYWORDS = {
+    "familia": ["piscina", "kids", "infantil", "criança", "playground", "recreação", "brinquedoteca", "family"],
+    "casal": ["spa", "sauna", "jacuzzi", "hidromassagem", "romântico", "bar", "lounge", "adulto"],
+    "negocios": ["wifi", "business", "centro de convenções", "sala de reunião", "estacionamento", "transfer"],
+    "economico": [],
+}
+
+PROFILE_STAR_RANGE = {
+    "familia": (3, 5),
+    "casal": (4, 5),
+    "negocios": (3, 5),
+    "economico": (1, 3),
+}
+
+
+def tool_recomendar_hoteis(perfil: str, cidade=None, estado=None,
+                           data_checkin=None, data_checkout=None, limite: int = 5) -> str:
+    perfil = perfil.lower().strip()
+    if perfil not in PROFILE_AMENITY_KEYWORDS:
+        return _json({"erro": f"Perfil '{perfil}' não reconhecido. Use: familia, casal, negocios, economico."})
+
+    keywords = PROFILE_AMENITY_KEYWORDS[perfil]
+    star_min, star_max = PROFILE_STAR_RANGE[perfil]
+    limite = min(limite or 5, 10)
+
+    where_conditions = ["h.stars >= %s", "h.stars <= %s"]
+    where_params: list = [star_min, star_max]
+
+    if cidade:
+        where_conditions.append("h.city ILIKE %s")
+        where_params.append(f"%{cidade}%")
+    if estado:
+        where_conditions.append("h.state ILIKE %s")
+        where_params.append(f"%{estado}%")
+
+    if keywords:
+        cases = " + ".join(
+            f"CASE WHEN h.amenities::text ILIKE '%%{kw}%%' THEN 1 ELSE 0 END"
+            for kw in keywords
+        )
+        amenity_score = f"({cases})"
+    else:
+        amenity_score = "1"
+
+    price_join = ""
+    join_params: list = []
+    price_select = "NULL as preco_medio"
+    price_order = f"{amenity_score} DESC, h.stars DESC"
+
+    if data_checkin and data_checkout:
+        price_join = "LEFT JOIN hotel_diarias d ON d.hotel_id = h.id AND d.date >= %s AND d.date < %s AND d.amount > 0"
+        join_params = [data_checkin, data_checkout]
+        price_select = "avg(d.amount)::numeric(10,2) as preco_medio"
+        if keywords:
+            price_order = f"{amenity_score} DESC, preco_medio ASC NULLS LAST"
+        else:
+            price_order = "preco_medio ASC NULLS LAST"
+
+    all_params = join_params + where_params + [perfil, limite]
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(f"""
+                SELECT h.external_id, h.name, h.city, h.state, h.stars,
+                       {amenity_score} as score, {price_select}
+                FROM hotels h
+                {price_join}
+                WHERE {' AND '.join(where_conditions)} AND h.amenities IS NOT NULL
+                GROUP BY h.id, h.external_id, h.name, h.city, h.state, h.stars, h.amenities
+                HAVING {amenity_score} > 0 OR %s = 'economico'
+                ORDER BY {price_order}
+                LIMIT %s
+            """, all_params)
+            rows = cur.fetchall()
+
+    if not rows:
+        return _json({"resultado": f"Nenhum hotel encontrado para o perfil '{perfil}' com esses filtros."})
+
+    return _json({
+        "perfil": perfil,
+        "filtro_cidade": cidade, "filtro_estado": estado,
+        "recomendacoes": [
+            {"external_id": r[0], "hotel": r[1], "cidade": r[2], "estado": r[3],
+             "estrelas": r[4], "score_amenities": r[5],
+             "preco_medio": float(r[6]) if r[6] else None}
+            for r in rows
+        ],
+    })
+
+
 TOOL_DISPATCH = {
     "buscar_hoteis": tool_buscar_hoteis,
     "buscar_diarias": tool_buscar_diarias,
@@ -666,6 +843,8 @@ TOOL_DISPATCH = {
     "resumo_estatisticas": tool_resumo_estatisticas,
     "adicionar_watchlist": tool_adicionar_watchlist,
     "remover_watchlist": tool_remover_watchlist,
+    "sugerir_datas": tool_sugerir_datas,
+    "recomendar_hoteis": tool_recomendar_hoteis,
 }
 
 
@@ -787,12 +966,17 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "🏨 *Assistente de Cotação de Diárias*\n\n"
         "Posso consultar preços de mais de 3.000 hotéis brasileiros.\n\n"
-        "Exemplos:\n"
+        "*Exemplos:*\n"
         "• _Quanto custa o Tauá de 10/04 a 15/04?_\n"
-        "• _Qual o hotel mais barato em Gramado?_\n"
-        "• _Quais hotéis estou monitorando?_\n"
-        "• _Qual o melhor dia da semana para reservar o Fasano?_\n\n"
-        "Envie sua pergunta!",
+        "• _Hotel mais barato em Gramado em abril_\n"
+        "• _Compare Salinas Maragogi com Cana Brava_\n"
+        "• _O que tem no Fasano? Quais amenities?_\n"
+        "• _Monitore o Tauá de 01/06 a 05/06_\n"
+        "• _Qual o melhor dia da semana pro Japaratinga?_\n"
+        "• _Cidades mais baratas na Bahia_\n\n"
+        "*Comandos:*\n"
+        "/relatorio — Resumo dos hotéis monitorados\n"
+        "/reset — Reiniciar conversa\n",
         parse_mode="Markdown",
     )
 
@@ -801,6 +985,62 @@ async def cmd_reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     conversation_history.pop(chat_id, None)
     await update.message.reply_text("🔄 Conversa reiniciada.")
+
+
+async def cmd_relatorio(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT h.name, w.date_start, w.date_end, w.label, w.target_price,
+                       (SELECT min(d.amount) FROM hotel_diarias d
+                        WHERE d.hotel_id = h.id AND d.date BETWEEN w.date_start AND w.date_end AND d.amount > 0),
+                       (SELECT avg(d.amount)::numeric(10,2) FROM hotel_diarias d
+                        WHERE d.hotel_id = h.id AND d.date BETWEEN w.date_start AND w.date_end AND d.amount > 0),
+                       (SELECT d.amount FROM hotel_diarias d
+                        WHERE d.hotel_id = h.id AND d.date = CURRENT_DATE LIMIT 1),
+                       (SELECT count(*) FROM hotel_precos_historico hp
+                        JOIN hotel_diarias d2 ON hp.hotel_diaria_id = d2.id
+                        WHERE d2.hotel_id = h.id AND hp.captured_at >= now() - interval '7 days')
+                FROM watched_hotels w
+                JOIN hotels h ON w.hotel_id = h.id
+                ORDER BY w.date_start
+            """)
+            rows = cur.fetchall()
+
+    if not rows:
+        await update.message.reply_text("📋 Nenhum hotel na watchlist.")
+        return
+
+    lines = ["📊 *Relatório da Watchlist*\n"]
+    for r in rows:
+        name, d_start, d_end, label, target = r[0], r[1], r[2], r[3], r[4]
+        min_price, avg_price, today_price, changes_7d = r[5], r[6], r[7], r[8]
+
+        lines.append(f"🏨 *{name}*")
+        if label:
+            lines.append(f"   🏷️ {label}")
+        lines.append(f"   📅 {d_start} → {d_end}")
+
+        price_parts = []
+        if min_price:
+            price_parts.append(f"Mín: R${float(min_price):.2f}")
+        if avg_price:
+            price_parts.append(f"Méd: R${float(avg_price):.2f}")
+        if today_price:
+            price_parts.append(f"Hoje: R${float(today_price):.2f}")
+        if price_parts:
+            lines.append(f"   💰 {' | '.join(price_parts)}")
+
+        if target:
+            hit = "✅" if min_price and float(min_price) <= float(target) else "⏳"
+            lines.append(f"   🎯 Alvo: R${float(target):.2f} {hit}")
+
+        if changes_7d:
+            lines.append(f"   📈 {changes_7d} mudança(s) de preço nos últimos 7 dias")
+
+        lines.append("")
+
+    await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -844,6 +1084,7 @@ def run_bot():
 
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("reset", cmd_reset))
+    app.add_handler(CommandHandler("relatorio", cmd_relatorio))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     logger.info("Bot Telegram iniciado (polling)")
