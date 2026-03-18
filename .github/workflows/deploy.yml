@@ -51,10 +51,12 @@ jobs:
             set -e
             cd /opt/omnibees_data
             docker build -t omnibees-data:latest .
-            docker rm -f omnibees-api omnibees-cron || true
+            docker rm -f omnibees-api omnibees-cron omnibees-bot || true
             docker run -d --name omnibees-api --restart unless-stopped \
               --env-file .env -p 8000:8000 omnibees-data:latest api
             docker run -d --name omnibees-cron --restart unless-stopped \
               --env-file .env omnibees-data:latest cron
+            docker run -d --name omnibees-bot --restart unless-stopped \
+              --env-file .env omnibees-data:latest bot
             docker ps --format 'table {{.Names}}\t{{.Status}}'
           EOF
