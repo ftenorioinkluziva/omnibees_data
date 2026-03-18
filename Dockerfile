@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY api.py config.py db.py cli.py telegram_alerts.py ./
+COPY api.py config.py db.py cli.py telegram_alerts.py telegram_bot.py ./
 COPY omnibees_price_scraper.py omnibees_complete_scraper.py omnibees_async_scraper.py migrate_to_postgres.py ./
 COPY static ./static
 COPY crontab /etc/cron.d/omnibees

@@ -342,6 +342,11 @@ def cmd_healthcheck(args):
         sys.exit(0)
 
 
+def cmd_bot(args):
+    from telegram_bot import run_bot
+    run_bot()
+
+
 def main():
     parser = argparse.ArgumentParser(
         prog="omnibees",
@@ -388,6 +393,7 @@ def main():
 
     sub.add_parser("healthcheck", help="Verificar saúde do sistema")
     sub.add_parser("telegram-setup", help="Obter Chat ID para configurar alertas Telegram")
+    sub.add_parser("bot", help="Iniciar bot Telegram (assistente de cotação via AI)")
 
     args = parser.parse_args()
     commands = {
@@ -399,6 +405,7 @@ def main():
         "query": cmd_query,
         "healthcheck": cmd_healthcheck,
         "telegram-setup": cmd_telegram_setup,
+        "bot": cmd_bot,
     }
     commands[args.command](args)
 

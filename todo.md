@@ -12,10 +12,12 @@
 - [x] Detectar padroes (dia da semana mais barato, tendencia de alta/baixa)
 - [x] Expandir coleta para todos os 3.359 hoteis (lotes + checkpoint/resume)
 - [x] Deploy VPS + cron
+- [x] Bot Telegram com AI (Gemini + function calling, substitui n8n agent)
 
 ## Proximo
 - [ ] Configurar dominio + HTTPS (TLS)
 - [ ] Desligar workflow n8n
 
 ## Futuro
+- [ ] Consulta de passagens aereas via bot Telegram (Apify Google Flights scraper)
 - [ ] Hardening de producao (backup/monitoramento)
