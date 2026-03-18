@@ -5,7 +5,6 @@ Migra dados dos JSONs locais (chains/ e hotels/) para o PostgreSQL no Neon.
 - Atualiza hotels existentes com dados enriquecidos dos JSONs
 - Vincula hotels às chains via chain_id
 """
-
 import json
 import psycopg2
 from config import DATABASE_URL, CHAINS_DIR, HOTELS_DIR

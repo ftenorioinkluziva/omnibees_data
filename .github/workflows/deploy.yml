@@ -21,6 +21,17 @@ jobs:
           printf 'Host %s\n  StrictHostKeyChecking no\n  UserKnownHostsFile /dev/null\n' \
             "${{ secrets.VPS_HOST }}" >> ~/.ssh/config
 
+      - name: Validate secrets
+        run: |
+          if echo "${{ secrets.VPS_HOST }}" | grep -q 'BEGIN'; then
+            echo "ERROR: VPS_HOST parece conter uma chave SSH em vez do hostname/IP."
+            exit 1
+          fi
+          if [ -z "${{ secrets.VPS_HOST }}" ] || [ -z "${{ secrets.VPS_USER }}" ]; then
+            echo "ERROR: VPS_HOST ou VPS_USER estao vazios."
+            exit 1
+          fi
+
       - name: Sync files to VPS
         run: |
           rsync -az --delete \
