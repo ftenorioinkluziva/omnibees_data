@@ -8,7 +8,7 @@ from typing import Dict, Optional
 import requests
 
 from db import get_connection
-from location_parser import parse_location_text
+from location_parser import parse_location_text, zip_to_state
 
 
 def normalize_zip(zip_code: str) -> str:
@@ -108,8 +108,20 @@ def run(
                 parsed = parse_location_text(raw_location)
 
                 candidate_zip = normalize_zip(parsed["zip_code"]) or current_zip
-                viacep_data = None
 
+                # --- state ---
+                # 1. Try zip-based offline lookup (no API, deterministic)
+                zip_state = zip_to_state(candidate_zip)
+                # 2. Try regex-based parsing from raw text
+                parsed_state = parsed["state"]
+
+                # Priority: current (if valid) > zip_state > parsed_state
+                state_is_valid = bool(re.fullmatch(r"[A-Z]{2}", current_state))
+                candidate_state = zip_state or parsed_state
+                force_state = not state_is_valid and bool(candidate_state)
+
+                # --- city ---
+                viacep_data = None
                 if use_viacep and candidate_zip:
                     if candidate_zip not in cep_cache:
                         cep_cache[candidate_zip] = fetch_viacep(candidate_zip)
@@ -117,43 +129,23 @@ def run(
                             time.sleep(delay)
                     viacep_data = cep_cache[candidate_zip]
 
-                candidate_state = ""
                 candidate_city = ""
                 candidate_address = ""
-
-                if viacep_data:
-                    candidate_state = viacep_data["state"]
-                    candidate_city = viacep_data["city"]
-                    candidate_address = viacep_data["address"]
-
-                if not candidate_state:
-                    candidate_state = parsed["state"]
-                if not candidate_city:
-                    candidate_city = parsed["city"]
-
-                force_state = False
                 force_city = False
 
-                if viacep_data and candidate_state:
-                    if re.search(r"-?\d{1,3}\.\d{3,}", current_city):
-                        candidate_state = ""
-                        candidate_city = ""
-                    elif polluted_city(current_city) and not explicit_uf_in_raw(raw_location, candidate_state):
-                        candidate_state = ""
-                    else:
-                        force_state = not re.fullmatch(r"[A-Z]{2}", current_state or "")
-                elif candidate_state and explicit_uf_in_raw(raw_location, candidate_state):
-                    force_state = not re.fullmatch(r"[A-Z]{2}", current_state or "")
-                else:
-                    candidate_state = ""
+                if viacep_data:
+                    if plausible_city(viacep_data.get("city", "")):
+                        candidate_city = viacep_data["city"]
+                        force_city = polluted_city(current_city) or not current_city
+                    candidate_address = viacep_data.get("address", "")
 
-                if viacep_data and candidate_city and plausible_city(candidate_city):
-                    force_city = polluted_city(current_city) or not current_city
-                elif candidate_city and plausible_city(candidate_city) and explicit_uf_in_raw(raw_location, parsed["state"]):
-                    force_city = polluted_city(current_city) or not current_city
-                else:
-                    candidate_city = ""
+                if not candidate_city:
+                    parsed_city = parsed["city"]
+                    if plausible_city(parsed_city) and (polluted_city(current_city) or not current_city):
+                        candidate_city = parsed_city
+                        force_city = True
 
+                # Never update city when it contains coordinates
                 if re.search(r"-?\d{1,3}\.\d{3,}", current_city):
                     candidate_state = ""
                     candidate_city = ""

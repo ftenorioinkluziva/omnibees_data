@@ -7,6 +7,49 @@ UF_CODES = {
     "SP", "SE", "TO",
 }
 
+# CEP prefix ranges (5 digits) → UF mapping based on Correios postal code system
+_CEP_RANGES: list[tuple[int, int, str]] = [
+    (1000,  19999, "SP"),
+    (20000, 28999, "RJ"),
+    (29000, 29999, "ES"),
+    (30000, 39999, "MG"),
+    (40000, 48999, "BA"),
+    (49000, 49999, "SE"),
+    (50000, 56999, "PE"),
+    (57000, 57999, "AL"),
+    (58000, 58999, "PB"),
+    (59000, 59999, "RN"),
+    (60000, 63999, "CE"),
+    (64000, 64999, "PI"),
+    (65000, 65999, "MA"),
+    (66000, 68899, "PA"),
+    (68900, 68999, "AP"),
+    (69000, 69299, "AM"),
+    (69300, 69399, "RR"),
+    (69400, 69899, "AM"),
+    (69900, 69999, "AC"),
+    (70000, 72799, "DF"),
+    (72800, 76799, "GO"),
+    (76800, 76999, "RO"),
+    (77000, 77999, "TO"),
+    (78000, 78999, "MT"),
+    (79000, 79999, "MS"),
+    (80000, 87999, "PR"),
+    (88000, 89999, "SC"),
+    (90000, 99999, "RS"),
+]
+
+
+def zip_to_state(zip_code: str) -> str:
+    digits = re.sub(r"\D", "", zip_code or "")
+    if len(digits) != 8:
+        return ""
+    prefix = int(digits[:5])
+    for lo, hi, uf in _CEP_RANGES:
+        if lo <= prefix <= hi:
+            return uf
+    return ""
+
 
 def _clean_text(text: str) -> str:
     normalized = " ".join((text or "").split())
