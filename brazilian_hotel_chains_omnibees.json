@@ -1,0 +1,274 @@
+{
+  "metadata": {
+    "scraped_at": "2026-02-02T00:00:00Z",
+    "source": "book.omnibees.com",
+    "country_filter": "Brasil",
+    "note": "Chains discovered via web search - for complete scraping, run the provided Python script locally"
+  },
+  "chains": [
+    {
+      "id": 986,
+      "name": "Blue Tree Hotels",
+      "url": "https://book.omnibees.com/chain/986",
+      "country": "Brasil",
+      "cities": ["São Paulo", "Porto Alegre", "Caxias do Sul", "Santo André", "Lins", "Teresina", "Manaus", "Joinville"],
+      "description": "Rede de hotéis de alto padrão com presença nacional"
+    },
+    {
+      "id": 1044,
+      "name": "Rede de Hotéis Mato Grosso",
+      "url": "https://book.omnibees.com/chain/1044",
+      "country": "Brasil",
+      "cities": ["Cuiabá", "Santo Antônio do Leverger"],
+      "description": "Rede regional com hotéis e resort de águas termais"
+    },
+    {
+      "id": 1052,
+      "name": "Hotel Pousada dos Pireneus Resort",
+      "url": "https://book.omnibees.com/chain/1052",
+      "country": "Brasil",
+      "cities": ["Pirenópolis"],
+      "description": "Resort em área de 137.000 m² próximo ao centro histórico"
+    },
+    {
+      "id": 1078,
+      "name": "Travel Inn Hotels",
+      "url": "https://book.omnibees.com/chain/1078",
+      "country": "Brasil",
+      "cities": ["São Paulo"],
+      "description": "Rede com foco em custo-benefício"
+    },
+    {
+      "id": 1096,
+      "name": "Hotelaria Brasil / Matiz Hotels",
+      "url": "https://book.omnibees.com/chain/1096",
+      "country": "Brasil",
+      "cities": ["São Paulo", "Niterói", "Duque de Caxias", "Campinas", "Ribeirão Preto", "Igaratá", "Campos do Jordão", "Jaguariúna"],
+      "description": "Rede Matiz com hotéis em várias cidades do Sudeste"
+    },
+    {
+      "id": 1257,
+      "name": "Rede de Pousadas Búzios",
+      "url": "https://book.omnibees.com/chain/1257",
+      "country": "Brasil",
+      "cities": ["Armação dos Búzios"],
+      "hotels": ["Pousada Byblos", "Pousada Corais e Conchas", "Pousada Blue Marlin"],
+      "description": "Coleção de pousadas em Búzios"
+    },
+    {
+      "id": 1261,
+      "name": "Continental Inn Hotels",
+      "url": "https://book.omnibees.com/chain/1261",
+      "country": "Brasil",
+      "cities": ["Foz do Iguaçu", "Curitiba"],
+      "hotels": ["Continental Inn Hotel", "Hotel Manacá", "Hotel Granville"],
+      "description": "Rede com hotéis no Paraná"
+    },
+    {
+      "id": 1328,
+      "name": "Atlantica Hotels International Brasil",
+      "url": "https://book.omnibees.com/chain/1328",
+      "country": "Brasil",
+      "cities": ["São Paulo", "Curitiba", "Recife"],
+      "description": "Uma das maiores redes hoteleiras da América do Sul - Transamerica, Radisson, etc."
+    },
+    {
+      "id": 1340,
+      "name": "Windsor Hotéis",
+      "url": "https://book.omnibees.com/chain/1340",
+      "country": "Brasil",
+      "cities": ["Rio de Janeiro", "Brasília"],
+      "hotels": ["Windsor Barra", "Windsor Copa", "Windsor Excelsior", "Windsor Florida", "Windsor Leme", "Windsor Marapendi", "Windsor Oceanico", "Windsor Plaza Brasília", "Windsor Brasília"],
+      "description": "Rede premium com forte presença no Rio de Janeiro"
+    },
+    {
+      "id": 1345,
+      "name": "Intercity Hotels",
+      "url": "https://book.omnibees.com/chain/1345",
+      "country": "Brasil",
+      "description": "Rede de hotéis de negócios"
+    },
+    {
+      "id": 1377,
+      "name": "Rede Brisa de Hotéis",
+      "url": "https://book.omnibees.com/chain/1377",
+      "country": "Brasil",
+      "description": "Rede de hotéis regionais"
+    },
+    {
+      "id": 1488,
+      "name": "Manhattan Plaza Hotel",
+      "url": "https://book.omnibees.com/chain/1488",
+      "country": "Brasil",
+      "cities": ["Brasília"],
+      "address": "SHN Quadra 2 Bloco A, Setor Hoteleiro Norte, Brasília",
+      "description": "Hotel no setor hoteleiro de Brasília"
+    },
+    {
+      "id": 1630,
+      "name": "Praiamar Hotéis",
+      "url": "https://book.omnibees.com/chain/1630",
+      "country": "Brasil",
+      "cities": ["Natal"],
+      "hotels_count": 3,
+      "hotels": [
+        {"id": 2623, "name": "Praiamar Natal Hotel e Convention", "stars": 4},
+        {"id": 2817, "name": "Praiamar Express Hotel", "stars": 3},
+        {"id": 4529, "name": "Praiamar Arena", "stars": 4}
+      ],
+      "contact": {
+        "email": "reservas@praiamarnatal.com.br",
+        "phone": "(84) 3219 2230"
+      },
+      "description": "Rede de hotéis em Natal/RN com acesso ao Praiamar Beach Club"
+    },
+    {
+      "id": 1748,
+      "name": "Rede Plaza Hotéis",
+      "url": "https://book.omnibees.com/chain/1748",
+      "country": "Brasil",
+      "cities": ["Santo Amaro da Imperatriz", "Porto Alegre", "Camaçari", "Rio de Janeiro", "Garibaldi"],
+      "description": "Rede Plaza de Hotéis, Resorts & SPA"
+    },
+    {
+      "id": 1785,
+      "name": "Rede de Hotéis Deville",
+      "url": "https://book.omnibees.com/chain/1785",
+      "country": "Brasil",
+      "cities": ["Salvador", "Cuiabá", "Campo Grande", "Curitiba"],
+      "description": "Rede premium com hotéis pet-friendly"
+    },
+    {
+      "id": 2056,
+      "name": "Pousada Cristal",
+      "url": "https://book.omnibees.com/chain/2056",
+      "country": "Brasil",
+      "cities": ["Morro de São Paulo"],
+      "description": "Pousada com 15 apartamentos em Morro de São Paulo"
+    },
+    {
+      "id": 3015,
+      "name": "Grupo Arrey Hotéis",
+      "url": "https://book.omnibees.com/chain/3015",
+      "country": "Brasil",
+      "cities": ["Teresina", "Picos", "Parnaíba", "Luís Correia", "Cajueiro da Praia", "Piracuruca"],
+      "description": "Rede de hotéis no Piauí"
+    },
+    {
+      "id": 3150,
+      "name": "Rede Faro Hotéis",
+      "url": "https://book.omnibees.com/chain/3150",
+      "country": "Brasil",
+      "cities": ["São José dos Campos", "Taubaté", "Atibaia"],
+      "description": "Hotéis com bom custo-benefício no interior de SP"
+    },
+    {
+      "id": 3541,
+      "name": "Frimas Hotel",
+      "url": "https://book.omnibees.com/chain/3541",
+      "country": "Brasil",
+      "cities": ["Belo Horizonte"],
+      "description": "Hotel no bairro Santa Tereza em BH"
+    },
+    {
+      "id": 3891,
+      "name": "Paraíso Ecológico Pousada & SPA",
+      "url": "https://book.omnibees.com/chain/3891",
+      "country": "Brasil",
+      "cities": ["Arraial d'Ajuda", "Porto Seguro"],
+      "description": "Pousada sustentável próxima à Rua do Mucugê, LGBTQIA+ Friendly"
+    },
+    {
+      "id": 4733,
+      "name": "Pousada Reserva do Patacho",
+      "url": "https://book.omnibees.com/chain/4733",
+      "country": "Brasil",
+      "cities": ["Porto de Pedras"],
+      "description": "Pousada na Rota Ecológica dos Milagres, Alagoas"
+    },
+    {
+      "id": 5046,
+      "name": "Pousada Villa da Esperança",
+      "url": "https://book.omnibees.com/chain/5046",
+      "country": "Brasil",
+      "cities": ["Campos do Jordão"],
+      "description": "Pousada em 6.000m² de jardins na região do Palácio Boa Vista"
+    },
+    {
+      "id": 5779,
+      "name": "Rede Mova Hotéis",
+      "url": "https://book.omnibees.com/chain/5779",
+      "country": "Brasil",
+      "cities": ["Poços de Caldas", "São Paulo"],
+      "description": "Hotéis econômicos em Minas e São Paulo"
+    },
+    {
+      "id": 6430,
+      "name": "Ody Park Aquático e Resort Hotel",
+      "url": "https://book.omnibees.com/chain/6430",
+      "country": "Brasil",
+      "description": "Resort com parque aquático, 71 chalés"
+    },
+    {
+      "id": 6432,
+      "name": "Rede dos Sonhos",
+      "url": "https://book.omnibees.com/chain/6432",
+      "country": "Brasil",
+      "cities": ["Bueno Brandão", "Socorro"],
+      "hotels": ["Hotel Fazenda Parque dos Sonhos", "Hotel Fazenda Campo dos Sonhos", "Hotel Fazenda Colina dos Sonhos"],
+      "description": "Hotéis fazenda na Serra da Mantiqueira"
+    },
+    {
+      "id": 7674,
+      "name": "Brasil Tropical Village",
+      "url": "https://book.omnibees.com/chain/7674",
+      "country": "Brasil",
+      "cities": ["Tibau do Sul", "Pipa"],
+      "description": "Pousada próxima à Praia do Amor"
+    },
+    {
+      "id": 8776,
+      "name": "Rede Liva",
+      "url": "https://book.omnibees.com/chain/8776",
+      "country": "Brasil",
+      "cities": ["Maraú", "Campos do Jordão", "Itajaí", "Gramado", "Canela", "Búzios"],
+      "hotels": ["Vivant Eco Beach", "Wanderlust Experience Hotel", "Hotel Brava Mundo", "Poehma Lago Negro", "Golden Tulip", "Santé Vivre L'Expérience"],
+      "description": "Rede de hotéis de experiência e boutique"
+    },
+    {
+      "id": 9531,
+      "name": "Hotel Nacional Rio de Janeiro",
+      "url": "https://book.omnibees.com/chain/9531",
+      "country": "Brasil",
+      "cities": ["Rio de Janeiro"],
+      "description": "Hotel icônico projetado por Oscar Niemeyer com jardins de Burle Marx em São Conrado"
+    },
+    {
+      "id": 9906,
+      "name": "Score Hotel Assessoria",
+      "url": "https://book.omnibees.com/chain/9906",
+      "country": "Brasil",
+      "cities": ["Búzios", "Nova Friburgo"],
+      "hotels": ["Uni Boutique Hotel & Spa", "Suri Búzios Hotel", "Buzios Mar Hotel", "Parador Lumiar", "Greco Hotel"],
+      "description": "Assessoria hoteleira com propriedades na região serrana e Búzios"
+    },
+    {
+      "id": 10604,
+      "name": "Pousada Iapôi",
+      "url": "https://book.omnibees.com/chain/10604",
+      "country": "Brasil",
+      "cities": ["Porto de Galinhas", "Ipojuca"],
+      "description": "Pousada no centro de Porto de Galinhas"
+    }
+  ],
+  "summary": {
+    "total_chains": 30,
+    "regions_covered": {
+      "Norte": ["Manaus"],
+      "Nordeste": ["Natal", "Teresina", "Picos", "Parnaíba", "Luís Correia", "Cajueiro da Praia", "Piracuruca", "Salvador", "Morro de São Paulo", "Porto de Galinhas", "Maraú", "Recife", "Porto de Pedras"],
+      "Centro-Oeste": ["Brasília", "Cuiabá", "Campo Grande", "Pirenópolis"],
+      "Sudeste": ["São Paulo", "Rio de Janeiro", "Niterói", "Búzios", "Arraial d'Ajuda", "Porto Seguro", "Belo Horizonte", "Campos do Jordão", "Campinas", "São José dos Campos", "Taubaté", "Atibaia", "Ribeirão Preto", "Igaratá", "Jaguariúna", "Poços de Caldas", "Socorro", "Bueno Brandão", "Nova Friburgo"],
+      "Sul": ["Porto Alegre", "Curitiba", "Caxias do Sul", "Foz do Iguaçu", "Joinville", "Santo Amaro da Imperatriz", "Itajaí", "Gramado", "Canela", "Garibaldi"]
+    }
+  }
+}

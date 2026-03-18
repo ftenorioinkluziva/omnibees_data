@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:book.omnibees.com)",
+      "Bash(python:*)",
+      "Bash(more:*)",
+      "Bash(timeout:*)",
+      "Bash(powershell:*)"
+    ]
+  }
+}

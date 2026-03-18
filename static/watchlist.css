@@ -1,0 +1,341 @@
+.watch-main {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+/* ── Add Form ── */
+.card-add {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    background: var(--bg-card);
+}
+
+.add-form {
+    display: flex;
+    flex-direction: column;
+    gap: .8rem;
+}
+
+.add-row {
+    display: flex;
+    gap: .6rem;
+    align-items: flex-end;
+}
+
+.add-row-fields {
+    flex-wrap: wrap;
+}
+
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: .3rem;
+    flex: 1;
+    min-width: 140px;
+}
+
+.field label {
+    font-size: .68rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: .8px;
+}
+
+.field input {
+    padding: .55rem .7rem;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: .82rem;
+    outline: none;
+    transition: border-color .15s;
+}
+
+.field input:focus {
+    border-color: var(--accent);
+}
+
+.btn-add {
+    padding: .55rem 1.5rem;
+    align-self: flex-end;
+    white-space: nowrap;
+    height: 36px;
+}
+
+/* ── Autocomplete ── */
+.search-autocomplete {
+    position: relative;
+    flex: 1;
+}
+
+.search-autocomplete input {
+    width: 100%;
+    padding: .65rem .9rem;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: .85rem;
+    outline: none;
+    transition: border-color .15s;
+}
+
+.search-autocomplete input:focus {
+    border-color: var(--accent);
+}
+
+.autocomplete-results {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-top: none;
+    border-radius: 0 0 var(--radius) var(--radius);
+    max-height: 280px;
+    overflow-y: auto;
+    z-index: 50;
+    display: none;
+    box-shadow: var(--shadow);
+}
+
+.autocomplete-results.open {
+    display: block;
+}
+
+.ac-item {
+    padding: .6rem .9rem;
+    cursor: pointer;
+    transition: background .1s;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border);
+}
+
+.ac-item:last-child {
+    border-bottom: none;
+}
+
+.ac-item:hover {
+    background: var(--bg-card-hover);
+}
+
+.ac-item-name {
+    font-size: .82rem;
+    font-weight: 500;
+}
+
+.ac-item-meta {
+    font-size: .7rem;
+    color: var(--text-dim);
+}
+
+/* ── Watch Grid ── */
+.watch-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 1rem;
+}
+
+.empty-state {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 4rem 2rem;
+    color: var(--text-dim);
+}
+
+.empty-icon {
+    font-family: var(--font-display);
+    font-size: 3rem;
+    color: var(--border);
+    margin-bottom: .5rem;
+}
+
+.empty-text {
+    font-size: 1rem;
+    color: var(--text-muted);
+    margin-bottom: .3rem;
+}
+
+.empty-sub {
+    font-size: .75rem;
+}
+
+/* ── Watch Card ── */
+.watch-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.2rem;
+    transition: border-color .2s;
+    cursor: pointer;
+    position: relative;
+    animation: card-in .3s ease;
+}
+
+@keyframes card-in {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.watch-card:hover {
+    border-color: var(--border-hover);
+}
+
+.watch-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: .8rem;
+}
+
+.watch-card-name {
+    font-family: var(--font-display);
+    font-size: 1.05rem;
+    line-height: 1.2;
+}
+
+.watch-card-label {
+    font-size: .65rem;
+    color: var(--accent);
+    background: var(--accent-dim);
+    padding: .15rem .5rem;
+    border-radius: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.watch-card-meta {
+    font-size: .72rem;
+    color: var(--text-muted);
+    margin-bottom: 1rem;
+}
+
+.watch-card-prices {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: .5rem;
+}
+
+.wc-stat {
+    background: var(--bg-input);
+    padding: .5rem .6rem;
+    border-radius: var(--radius);
+    text-align: center;
+}
+
+.wc-stat-value {
+    font-family: var(--font-mono);
+    font-size: .85rem;
+    font-weight: 500;
+}
+
+.wc-stat-label {
+    font-size: .6rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    margin-top: .15rem;
+}
+
+.watch-card-target {
+    margin-top: .8rem;
+    padding-top: .6rem;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.target-info {
+    font-size: .72rem;
+    color: var(--text-muted);
+}
+
+.target-status {
+    font-family: var(--font-mono);
+    font-size: .72rem;
+    font-weight: 500;
+    padding: .15rem .5rem;
+    border-radius: 4px;
+}
+
+.target-hit {
+    color: var(--green);
+    background: rgba(34, 197, 94, .1);
+}
+
+.target-miss {
+    color: var(--text-dim);
+    background: var(--bg-input);
+}
+
+.watch-card-actions {
+    position: absolute;
+    top: .8rem;
+    right: .8rem;
+    display: flex;
+    gap: .3rem;
+    opacity: 0;
+    transition: opacity .15s;
+}
+
+.watch-card:hover .watch-card-actions {
+    opacity: 1;
+}
+
+.btn-icon {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    width: 26px;
+    height: 26px;
+    border-radius: var(--radius);
+    font-size: .75rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all .15s;
+}
+
+.btn-icon:hover {
+    color: var(--text);
+    border-color: var(--border-hover);
+}
+
+.btn-icon.btn-danger:hover {
+    color: var(--red);
+    border-color: var(--red);
+}
+
+/* ── Watch Detail ── */
+.card-watch-detail {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    background: var(--bg-card);
+    animation: slide-up .35s ease;
+}
+
+@media (max-width: 700px) {
+    .watch-grid {
+        grid-template-columns: 1fr;
+    }
+    .add-row-fields {
+        flex-direction: column;
+    }
+    .watch-card-prices {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}

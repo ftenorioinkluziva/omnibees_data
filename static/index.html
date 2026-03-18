@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Omnibees Data</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=IBM+Plex+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <div class="noise"></div>
+
+    <nav class="topbar">
+        <div class="topbar-left">
+            <a href="/" class="logo">omnibees<span class="logo-accent">/data</span></a>
+            <div class="nav-links">
+                <a href="/" class="active">Dashboard</a>
+                <a href="/watchlist.html">Watchlist</a>
+            </div>
+        </div>
+        <div class="topbar-right">
+            <span class="topbar-badge" id="last-update"></span>
+        </div>
+    </nav>
+
+    <main>
+        <!-- KPI Strip -->
+        <section class="kpi-strip" id="kpi-strip">
+            <div class="kpi" style="--delay: 0">
+                <span class="kpi-value" id="kpi-hotels">--</span>
+                <span class="kpi-label">Hoteis</span>
+            </div>
+            <div class="kpi-divider"></div>
+            <div class="kpi" style="--delay: 1">
+                <span class="kpi-value" id="kpi-chains">--</span>
+                <span class="kpi-label">Redes</span>
+            </div>
+            <div class="kpi-divider"></div>
+            <div class="kpi" style="--delay: 2">
+                <span class="kpi-value" id="kpi-diarias">--</span>
+                <span class="kpi-label">Diarias</span>
+            </div>
+            <div class="kpi-divider"></div>
+            <div class="kpi" style="--delay: 3">
+                <span class="kpi-value" id="kpi-avg">--</span>
+                <span class="kpi-label">Media hoje</span>
+            </div>
+            <div class="kpi-divider"></div>
+            <div class="kpi" style="--delay: 4">
+                <span class="kpi-value" id="kpi-changes">--</span>
+                <span class="kpi-label">Alteracoes</span>
+            </div>
+        </section>
+
+        <!-- Grid principal -->
+        <div class="grid-main">
+            <!-- Coluna esquerda -->
+            <div class="col-left">
+                <!-- Top Cidades -->
+                <section class="card card-cities">
+                    <h2 class="card-title">Cidades</h2>
+                    <div class="card-subtitle">Por quantidade de hoteis monitorados</div>
+                    <div id="cities-list" class="cities-list"></div>
+                </section>
+
+                <!-- Distribuicao -->
+                <section class="card card-dist">
+                    <h2 class="card-title">Faixas de preco</h2>
+                    <div class="card-subtitle">Distribuicao das diarias de hoje</div>
+                    <div class="chart-wrap">
+                        <canvas id="chart-distribution"></canvas>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Coluna direita (mais larga) -->
+            <div class="col-right">
+                <!-- Busca + Filtros -->
+                <section class="card card-search">
+                    <div class="search-bar">
+                        <input type="text" id="search-input" placeholder="Buscar hotel..." autocomplete="off">
+                        <div class="filter-row">
+                            <select id="filter-state"><option value="">UF</option></select>
+                            <select id="filter-stars"><option value="">Estrelas</option></select>
+                            <select id="filter-chain"><option value="">Rede</option></select>
+                            <button id="btn-search" class="btn-primary">Filtrar</button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Tabela de hoteis -->
+                <section class="card card-table">
+                    <div class="table-header">
+                        <h2 class="card-title">Hoteis</h2>
+                        <span class="table-count" id="table-count"></span>
+                    </div>
+                    <div class="table-scroll">
+                        <table id="hotels-table">
+                            <thead>
+                                <tr>
+                                    <th>Hotel</th>
+                                    <th>Cidade</th>
+                                    <th>UF</th>
+                                    <th>Estrelas</th>
+                                    <th>Rede</th>
+                                    <th class="col-price">Hoje</th>
+                                </tr>
+                            </thead>
+                            <tbody id="hotels-tbody"></tbody>
+                        </table>
+                    </div>
+                    <div class="table-footer">
+                        <button id="btn-prev" class="btn-ghost" disabled>&larr; Anterior</button>
+                        <span id="page-info"></span>
+                        <button id="btn-next" class="btn-ghost">Proximo &rarr;</button>
+                    </div>
+                </section>
+
+                <!-- Detalhe / Grafico de preco -->
+                <section class="card card-detail" id="detail-panel" style="display:none">
+                    <div class="detail-header">
+                        <div>
+                            <h2 class="detail-name" id="detail-name"></h2>
+                            <div class="detail-meta" id="detail-meta"></div>
+                        </div>
+                        <button class="btn-close" id="btn-close-detail">&times;</button>
+                    </div>
+
+                    <!-- Hotel info strip -->
+                    <div class="detail-info-strip" id="detail-info-strip" style="display:none"></div>
+
+                    <!-- Description -->
+                    <div class="detail-description" id="detail-description" style="display:none"></div>
+
+                    <!-- Image gallery -->
+                    <div class="detail-gallery" id="detail-gallery" style="display:none"></div>
+
+                    <!-- Price section -->
+                    <div class="detail-body">
+                        <div class="detail-price-header">
+                            <div class="detail-section-title">Precos</div>
+                            <div class="date-range-controls">
+                                <input type="date" id="price-date-from" class="date-input">
+                                <span class="date-range-sep">a</span>
+                                <input type="date" id="price-date-to" class="date-input">
+                                <button id="btn-date-filter" class="btn-date-filter">Aplicar</button>
+                                <button id="btn-date-reset" class="btn-ghost btn-date-reset">Limpar</button>
+                            </div>
+                        </div>
+                        <div class="chart-wrap chart-wrap-large">
+                            <canvas id="chart-prices"></canvas>
+                        </div>
+                        <div class="detail-stats" id="detail-stats"></div>
+                    </div>
+
+                    <!-- Room types -->
+                    <div class="detail-rooms" id="detail-rooms" style="display:none">
+                        <div class="detail-section-title">Tipos de quarto</div>
+                        <div class="detail-rooms-grid" id="detail-rooms-grid"></div>
+                    </div>
+
+                    <!-- Amenities -->
+                    <div class="detail-amenities" id="detail-amenities" style="display:none">
+                        <div class="detail-section-title">Comodidades</div>
+                        <div class="detail-amenities-grid" id="detail-amenities-grid"></div>
+                    </div>
+
+                    <!-- Comparar -->
+                    <div class="compare-section" id="compare-section" style="display:none">
+                        <h3 class="card-title">Comparativo</h3>
+                        <div class="chart-wrap chart-wrap-large">
+                            <canvas id="chart-compare"></canvas>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <script src="/app.js"></script>
+</body>
+</html>

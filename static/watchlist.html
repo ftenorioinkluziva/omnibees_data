@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Watchlist - Omnibees Data</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=IBM+Plex+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="/style.css">
+    <link rel="stylesheet" href="/watchlist.css">
+</head>
+<body>
+    <div class="noise"></div>
+
+    <nav class="topbar">
+        <div class="topbar-left">
+            <a href="/" class="logo">omnibees<span class="logo-accent">/data</span></a>
+            <div class="nav-links">
+                <a href="/">Dashboard</a>
+                <a href="/watchlist.html" class="active">Watchlist</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="watch-main">
+        <!-- Add Form -->
+        <section class="card card-add">
+            <h2 class="card-title">Adicionar hotel</h2>
+            <div class="card-subtitle">Monitore precos de hoteis em periodos especificos</div>
+
+            <div class="add-form">
+                <div class="add-row">
+                    <div class="search-autocomplete">
+                        <input type="text" id="hotel-search" placeholder="Buscar hotel pelo nome..." autocomplete="off">
+                        <div class="autocomplete-results" id="autocomplete-results"></div>
+                        <input type="hidden" id="hotel-ext-id">
+                    </div>
+                </div>
+                <div class="add-row add-row-fields">
+                    <div class="field">
+                        <label>Check-in</label>
+                        <input type="date" id="date-start">
+                    </div>
+                    <div class="field">
+                        <label>Check-out</label>
+                        <input type="date" id="date-end">
+                    </div>
+                    <div class="field">
+                        <label>Preco alvo (R$)</label>
+                        <input type="number" id="target-price" placeholder="Opcional" step="10">
+                    </div>
+                    <div class="field">
+                        <label>Nota</label>
+                        <input type="text" id="label-input" placeholder="Ex: Ferias julho">
+                    </div>
+                    <button class="btn-primary btn-add" id="btn-add">Adicionar</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Watchlist Cards -->
+        <section class="watch-grid" id="watch-grid"></section>
+
+        <!-- Detail chart -->
+        <section class="card card-watch-detail" id="watch-detail" style="display:none">
+            <div class="detail-header">
+                <div>
+                    <h2 class="detail-name" id="wd-name"></h2>
+                    <div class="detail-meta" id="wd-meta"></div>
+                </div>
+                <button class="btn-close" id="btn-close-wd">&times;</button>
+            </div>
+            <div class="chart-wrap chart-wrap-large">
+                <canvas id="chart-watch"></canvas>
+            </div>
+        </section>
+    </main>
+
+    <script src="/watchlist.js"></script>
+</body>
+</html>
