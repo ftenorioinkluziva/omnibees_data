@@ -1,9 +1,11 @@
+SHELL=/bin/bash
+
 # Coleta de precos - a cada 6 horas
-0 */6 * * * cd /app && python cli.py prices --workers 3 --delay 0.5 >> /var/log/omnibees_prices.log 2>&1
+0 */6 * * * . /etc/environment; cd /app && python cli.py prices --workers 3 --delay 0.5 >> /var/log/omnibees_prices.log 2>&1
 
 # Scrape de chains/hotels - domingos as 3h
-0 3 * * 0 cd /app && python cli.py scrape --start 0 --end 9999 --country Brasil --delay 1.0 >> /var/log/omnibees_scrape.log 2>&1
+0 3 * * 0 . /etc/environment; cd /app && python cli.py scrape --start 0 --end 9999 --country Brasil --delay 1.0 >> /var/log/omnibees_scrape.log 2>&1
 
 # Health check - a cada hora
-0 * * * * cd /app && python cli.py healthcheck >> /var/log/omnibees_health.log 2>&1
+0 * * * * . /etc/environment; cd /app && python cli.py healthcheck >> /var/log/omnibees_health.log 2>&1
 

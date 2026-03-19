@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-env >> /etc/environment
+env | sed 's/^\(.*\)$/export \1/' > /etc/environment
 
 if [ "$1" = "cron" ]; then
     echo "Starting cron daemon..."
