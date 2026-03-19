@@ -1,6 +1,6 @@
 # Omnibees Data
 
-Plataforma de coleta, armazenamento e visualizacao de dados hoteleiros do Omnibees (book.omnibees.com). Monitora precos de diarias de ~3.400 hoteis brasileiros com dashboard interativo e watchlist personalizada.
+Plataforma de coleta, armazenamento e visualizacao de dados hoteleiros do Omnibees (book.omnibees.com). Monitora precos de diarias de ~3.400 hoteis brasileiros com dashboard interativo, watchlist personalizada e bot Telegram com IA.
 
 ## Stack
 
@@ -8,19 +8,23 @@ Plataforma de coleta, armazenamento e visualizacao de dados hoteleiros do Omnibe
 - **Banco:** PostgreSQL (Neon serverless)
 - **Frontend:** HTML/CSS/JS vanilla, Chart.js
 - **Scraping:** aiohttp (async), BeautifulSoup
-- **Deploy:** Docker + cron
+- **Bot Telegram:** python-telegram-bot + Google Gemini (function calling)
+- **Deploy:** Docker, GitHub Actions CI/CD, VPS
 
 ## Estrutura
 
 ```
 omnibees_data/
 ├── api.py                      # FastAPI - dashboard + watchlist API
-├── cli.py                      # CLI unificado (status, prices, scrape, query)
+├── cli.py                      # CLI unificado (status, prices, scrape, query, bot)
 ├── config.py                   # Configuracao centralizada (.env)
 ├── db.py                       # Conexao PostgreSQL com retry
+├── telegram_bot.py             # Bot Telegram com IA (Gemini + function calling)
+├── telegram_alerts.py          # Alertas de variacao de preco via Telegram
 ├── omnibees_price_scraper.py   # Scraper de precos (substitui n8n)
 ├── omnibees_complete_scraper.py # Scraper de chains/hoteis (sincrono)
 ├── omnibees_async_scraper.py   # Scraper de chains/hoteis (async)
+├── omnibees_rescraper.py       # Re-scraper de hoteis com dados incompletos
 ├── migrate_to_postgres.py      # Migracao JSON -> PostgreSQL (one-time)
 ├── location_parser.py          # Parser robusto de localizacao (cidade, UF, CEP)
 ├── fix_hotel_locations.py      # Backfill de city/state/zip no banco
@@ -33,17 +37,18 @@ omnibees_data/
 │   └── watchlist.js            # Watchlist JS
 ├── Dockerfile
 ├── crontab                     # Precos 6/6h, scrape domingos, healthcheck 1/1h
-├── entrypoint.sh
+├── entrypoint.sh               # Entrypoint Docker (api/cron/bot/cli)
 ├── requirements.txt
-└── .env                        # DATABASE_URL (nao commitado)
+├── .github/workflows/deploy.yml # CI/CD - deploy automatico na VPS
+└── .env                        # Variaveis de ambiente (nao commitado)
 ```
 
 ## Banco de Dados
 
 | Tabela | Descricao |
 |--------|-----------|
-| `chains` | 2.680 redes hoteleiras |
-| `hotels` | 3.359 hoteis com detalhes |
+| `chains` | ~2.680 redes hoteleiras |
+| `hotels` | ~3.359 hoteis com detalhes, amenities, fotos |
 | `hotel_diarias` | ~975K diarias (date + amount + hotel_id) |
 | `hotel_precos_historico` | ~971K registros de variacao de preco |
 | `watched_hotels` | Hoteis monitorados pelo usuario (watchlist) |
@@ -57,13 +62,67 @@ source .venv/bin/activate  # Linux/Mac
 
 pip install -r requirements.txt
 
-# Criar .env com DATABASE_URL
-echo 'DATABASE_URL=postgresql://...' > .env
+# Criar .env com variaveis necessarias
+cat > .env <<EOF
+DATABASE_URL=postgresql://...
+TELEGRAM_BOT_TOKEN=...
+TELEGRAM_CHAT_ID=...
+GOOGLE_GENERATIVE_AI_API_KEY=...
+EOF
 ```
 
-## Uso
+## Variaveis de Ambiente
 
-### Dashboard + API
+| Variavel | Obrigatoria | Descricao |
+|----------|-------------|-----------|
+| `DATABASE_URL` | Sim | Connection string PostgreSQL (Neon) |
+| `TELEGRAM_BOT_TOKEN` | Bot | Token do bot Telegram (@BotFather) |
+| `TELEGRAM_CHAT_ID` | Alertas | Chat ID para alertas automaticos |
+| `GOOGLE_GENERATIVE_AI_API_KEY` | Bot | API key Google AI (Gemini) |
+
+## Bot Telegram (IA)
+
+Bot conversacional que consulta a base PostgreSQL usando Google Gemini 2.5 Flash com function calling. Responde perguntas sobre hoteis, precos, disponibilidade e recomendacoes.
+
+### Comandos
+
+| Comando | Descricao |
+|---------|-----------|
+| `/start` | Mensagem de boas-vindas com exemplos de uso |
+| `/reset` | Limpar historico de conversa |
+| `/relatorio` | Resumo dos hoteis monitorados na watchlist |
+
+### Tools (14 funcoes via function calling)
+
+| Tool | Descricao |
+|------|-----------|
+| `buscar_hoteis` | Busca hoteis por nome, cidade, estado ou estrelas |
+| `buscar_diarias` | Precos de diarias para um periodo |
+| `buscar_padroes` | Padroes de preco (dia mais barato, tendencias) |
+| `buscar_watchlist` | Lista hoteis monitorados na watchlist |
+| `comparar_hoteis` | Compara precos de 2-3 hoteis lado a lado |
+| `hotel_detalhes` | Informacoes completas (amenities, quartos, fotos) |
+| `buscar_mais_baratos` | Top N hoteis mais baratos por regiao/periodo |
+| `historico_precos` | Evolucao do preco ao longo do tempo |
+| `buscar_por_cidade` | Ranking de cidades por preco medio e qtd hoteis |
+| `resumo_estatisticas` | Stats gerais da base de dados |
+| `adicionar_watchlist` | Adicionar hotel ao monitoramento |
+| `remover_watchlist` | Remover hotel do monitoramento |
+| `sugerir_datas` | Datas mais baratas dado um hotel e mes |
+| `recomendar_hoteis` | Recomendacao por perfil (familia, casal, negocios) |
+
+### Exemplos de uso
+
+```
+"Qual o preço do Japaratinga Lounge para o feriado de 12 a 15 de junho?"
+"Compare Japaratinga e Salinas Maragogi para julho"
+"Quais os 5 hotéis mais baratos em Maceió em agosto?"
+"Recomende hotéis para família em Alagoas"
+"Qual a melhor data para ir ao Salinas Maragogi em setembro?"
+"Adicione o hotel 9098 na watchlist de 01/07 a 05/07 com alvo de R$800"
+```
+
+## Dashboard + API
 
 ```bash
 python -m uvicorn api:app --host 0.0.0.0 --port 8000 --reload
@@ -91,7 +150,7 @@ Acesse `http://localhost:8000` para o dashboard e `http://localhost:8000/watchli
 - `DELETE /api/watchlist/{id}` - Remover watch
 - `GET /api/watchlist/{id}/prices` - Precos diarios para grafico
 
-### CLI
+## CLI
 
 ```bash
 python cli.py status              # Stats do banco
@@ -100,22 +159,15 @@ python cli.py scrape              # Scrape chains/hoteis
 python cli.py query hotels        # Consultar hoteis
 python cli.py query prices 9098   # Precos de um hotel
 python cli.py healthcheck         # Verificar conectividade
-python cli.py fix-locations                        # Dry-run (nao altera o banco)
-python cli.py fix-locations --apply                # Aplicar correcoes no banco
-python cli.py fix-locations --limit 500            # Limitar hoteis analisados
-python cli.py fix-locations --summary-only         # Apenas totalizador, sem detalhes
-python cli.py fix-locations --with-viacep --apply  # Enriquecer via ViaCEP (mais lento)
+python cli.py bot                 # Iniciar bot Telegram
+python cli.py fix-locations                        # Dry-run
+python cli.py fix-locations --apply                # Aplicar correcoes
+python cli.py fix-locations --limit 500            # Limitar hoteis
+python cli.py fix-locations --summary-only         # Apenas totalizador
+python cli.py fix-locations --with-viacep --apply  # Enriquecer via ViaCEP
 ```
 
-| Flag | Default | Descricao |
-|------|---------|----------|
-| `--apply` | off | Persiste as alteracoes no banco |
-| `--limit N` | todos | Processa somente os N primeiros hoteis |
-| `--delay S` | 0.05 | Intervalo em segundos entre registros |
-| `--summary-only` | off | Exibe apenas o totalizador final |
-| `--with-viacep` | off | Consulta ViaCEP para enriquecer cidade/estado |
-
-### Scraper de Precos
+## Scraper de Precos
 
 ```bash
 python omnibees_price_scraper.py --hotels 50 --months 6 --workers 5 --delay 0.5
@@ -128,47 +180,51 @@ python omnibees_price_scraper.py --hotels 50 --months 6 --workers 5 --delay 0.5
 | `--workers` | 5 | Requisicoes simultaneas |
 | `--delay` | 0.5 | Delay entre requisicoes (s) |
 
-### Docker
+## Docker
 
 ```bash
 docker build -t omnibees-data .
-docker run --env-file .env omnibees-data cron    # Modo cron
-docker run --env-file .env omnibees-data prices   # Coleta unica
-docker run --env-file .env omnibees-data api      # Subir API
+docker run --env-file .env omnibees-data api      # Dashboard + API
+docker run --env-file .env omnibees-data bot      # Bot Telegram
+docker run --env-file .env omnibees-data cron     # Agendador (precos + scrape)
+docker run --env-file .env omnibees-data prices   # Coleta unica de precos
+docker run --env-file .env omnibees-data status   # Stats do banco
 ```
 
 ## Producao (VPS)
 
-Deploy validado em VPS Ubuntu com Docker.
+Deploy automatico via GitHub Actions (push na `main` → rsync + docker rebuild).
 
-### Acesso Frontend/API
+### Containers
+
+| Container | Funcao | Porta |
+|-----------|--------|-------|
+| `omnibees-api` | Dashboard + API REST | 8000 |
+| `omnibees-cron` | Coleta agendada de precos | - |
+| `omnibees-bot` | Bot Telegram com IA | - |
+
+### Acesso
 
 - Dashboard: `http://89.167.106.38:8000/`
 - Watchlist: `http://89.167.106.38:8000/watchlist.html`
-- API stats: `http://89.167.106.38:8000/api/stats`
+- API: `http://89.167.106.38:8000/api/stats`
 
-### Containers em execucao
-
-- `omnibees-api` (porta `8000`)
-- `omnibees-cron` (agendador)
-
-### Comandos de deploy no servidor
+### Deploy manual
 
 ```bash
 cd /opt/omnibees_data
 docker build -t omnibees-data:latest .
-
-docker rm -f omnibees-api omnibees-cron || true
+docker rm -f omnibees-api omnibees-cron omnibees-bot || true
 docker run -d --name omnibees-api --restart unless-stopped --env-file .env -p 8000:8000 omnibees-data:latest api
 docker run -d --name omnibees-cron --restart unless-stopped --env-file .env omnibees-data:latest cron
+docker run -d --name omnibees-bot --restart unless-stopped --env-file .env omnibees-data:latest bot
 ```
 
-### Verificacao rapida
+### Verificacao
 
 ```bash
 docker ps
-docker logs --tail 60 omnibees-api
-docker logs --tail 60 omnibees-cron
+docker logs --tail 60 omnibees-bot
 curl -fsS http://127.0.0.1:8000/api/stats
 ```
 
@@ -187,6 +243,19 @@ curl -fsS http://127.0.0.1:8000/api/stats
 - Preco alvo com indicador visual (atingido / acima)
 - Cards com preco minimo, medio e de hoje
 - Grafico de evolucao de precos com linha de alvo
+
+### Bot Telegram
+- Conversa natural em portugues via Gemini 2.5 Flash
+- 14 tools com function calling para queries SQL
+- Historico de conversa (10 mensagens por chat)
+- Gerenciamento de watchlist por conversa
+- Recomendacao por perfil (familia, casal, negocios, economico)
+- Sugestao de datas mais baratas (sliding window)
+- Relatorio resumido dos hoteis monitorados
+
+### Alertas
+- Notificacao automatica via Telegram quando preco varia
+- Integrado ao cron (executa a cada coleta de precos)
 
 ### Design
 - Dark theme editorial (DM Serif Display, IBM Plex Sans, JetBrains Mono)

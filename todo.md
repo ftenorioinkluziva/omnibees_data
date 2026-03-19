@@ -13,11 +13,24 @@
 - [x] Expandir coleta para todos os 3.359 hoteis (lotes + checkpoint/resume)
 - [x] Deploy VPS + cron
 - [x] Bot Telegram com AI (Gemini + function calling, substitui n8n agent)
+- [x] Tools: comparar_hoteis, hotel_detalhes, buscar_mais_baratos, historico_precos, buscar_por_cidade, resumo_estatisticas
+- [x] Gerenciar watchlist pelo bot (adicionar/remover hotéis monitorados via conversa)
+- [x] Comando /relatorio — resumo dos hotéis monitorados
+- [x] Sugerir datas mais baratas dado um hotel e um mês
+- [x] Recomendar hotéis por perfil (família, casal, negócios) usando amenities + estrelas + preço
 
-## Proximo
+## Proximo — Melhorias do Bot Telegram
+
+### Melhorias de UX
+- [ ] Formatação rica nas respostas (tabelas, emojis contextuais, links para dashboard)
+- [ ] Suporte a áudio/voz (transcrever via Whisper e processar como texto)
+- [ ] Sugestões proativas ("Você monitora o Japaratinga — o preço baixou 12% essa semana!")
+
+### Inteligência
+- [ ] Alertar automaticamente no chat quando preço de hotel monitorado atingir target
+
+## Backlog
 - [ ] Configurar dominio + HTTPS (TLS)
 - [ ] Desligar workflow n8n
-
-## Futuro
 - [ ] Consulta de passagens aereas via bot Telegram (Apify Google Flights scraper)
 - [ ] Hardening de producao (backup/monitoramento)
