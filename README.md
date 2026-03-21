@@ -1,6 +1,6 @@
 # Omnibees Data
 
-Plataforma de coleta, armazenamento e visualizacao de dados hoteleiros do Omnibees (book.omnibees.com). Monitora precos de diarias de ~3.400 hoteis brasileiros com dashboard interativo, watchlist personalizada e bot Telegram com IA.
+Plataforma de monitoramento de precos hoteleiros do Omnibees (book.omnibees.com). O usuario escolhe ate 10 hoteis para monitorar, e o sistema coleta precos 4x/dia, alerta variacoes e oferece consulta em tempo real via bot Telegram com IA.
 
 ## Stack
 
@@ -36,7 +36,7 @@ omnibees_data/
 │   ├── watchlist.css           # Estilos watchlist
 │   └── watchlist.js            # Watchlist JS
 ├── Dockerfile
-├── crontab                     # Precos 6/6h, scrape domingos, healthcheck 1/1h
+├── crontab                     # Precos watchlist 4x/dia, healthcheck 1/1h
 ├── entrypoint.sh               # Entrypoint Docker (api/cron/bot/cli)
 ├── requirements.txt
 ├── .github/workflows/deploy.yml # CI/CD - deploy automatico na VPS
@@ -82,7 +82,7 @@ EOF
 
 ## Bot Telegram (IA)
 
-Bot conversacional que consulta a base PostgreSQL usando Google Gemini 2.5 Flash com function calling. Responde perguntas sobre hoteis, precos, disponibilidade e recomendacoes.
+Bot conversacional com Google Gemini 2.5 Flash e function calling. Consulta precos em tempo real na API do Omnibees e monitora ate 10 hoteis favoritos com alertas de variacao.
 
 ### Comandos
 
@@ -200,7 +200,7 @@ Deploy automatico via GitHub Actions (push na `main` → rsync + docker rebuild)
 | Container | Funcao | Porta |
 |-----------|--------|-------|
 | `omnibees-api` | Dashboard + API REST | 8000 |
-| `omnibees-cron` | Coleta agendada de precos | - |
+| `omnibees-cron` | Coleta de precos da watchlist (4x/dia) | - |
 | `omnibees-bot` | Bot Telegram com IA | - |
 
 ### Acesso

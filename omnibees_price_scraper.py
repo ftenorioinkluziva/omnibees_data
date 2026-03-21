@@ -99,6 +99,23 @@ def get_hotels_from_db(hotel_ids: Optional[list[str]] = None) -> list[dict]:
         conn.close()
 
 
+def get_watchlist_hotels() -> list[dict]:
+    conn = psycopg2.connect(DATABASE_URL)
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT DISTINCT h.id, h.external_id, h.name
+                FROM watched_hotels w
+                JOIN hotels h ON w.hotel_id = h.id
+                WHERE w.notify = true
+                ORDER BY h.name
+            """)
+            rows = cur.fetchall()
+            return [{"db_id": r[0], "external_id": r[1], "name": r[2]} for r in rows]
+    finally:
+        conn.close()
+
+
 async def fetch_prices(session: aiohttp.ClientSession, hotel_ext_id: str,
                        date_start: str, date_end: str) -> Optional[list[dict]]:
     url = f"{AVAILABILITY_URL}/{hotel_ext_id}/{CURRENCY_ID}/{date_start}/{date_end}/1/0/0"
@@ -215,11 +232,19 @@ async def run(
     delay: float,
     batch_size: int = 250,
     resume: bool = False,
+    watchlist_only: bool = False,
 ):
-    hotels = get_hotels_from_db(hotel_ids)
-    if not hotels:
-        logger.error("Nenhum hotel encontrado no banco.")
-        return
+    if watchlist_only:
+        hotels = get_watchlist_hotels()
+        if not hotels:
+            logger.info("Nenhum hotel na watchlist — nada a coletar.")
+            return
+        logger.info(f"Modo watchlist: {len(hotels)} hotel(is) monitorado(s)")
+    else:
+        hotels = get_hotels_from_db(hotel_ids)
+        if not hotels:
+            logger.error("Nenhum hotel encontrado no banco.")
+            return
 
     checkpoint_path = PRICE_CHECKPOINT_FILE
 
@@ -316,9 +341,10 @@ def main():
     parser.add_argument("--delay", type=float, default=0.5, help="Delay entre requisições (default: 0.5s)")
     parser.add_argument("--batch-size", type=int, default=250, help="Hotéis por lote (default: 250)")
     parser.add_argument("--resume", action="store_true", help="Retomar do último checkpoint de preços")
+    parser.add_argument("--watchlist-only", action="store_true", help="Coletar apenas hotéis da watchlist")
     args = parser.parse_args()
 
-    asyncio.run(run(args.hotels, args.months, args.workers, args.delay, args.batch_size, args.resume))
+    asyncio.run(run(args.hotels, args.months, args.workers, args.delay, args.batch_size, args.resume, args.watchlist_only))
 
 
 if __name__ == "__main__":

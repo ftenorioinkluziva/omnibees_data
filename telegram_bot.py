@@ -24,8 +24,10 @@ from telegram.ext import (
 from dotenv import load_dotenv
 load_dotenv()
 
+import aiohttp
+
 from db import get_connection
-from config import TELEGRAM_BOT_TOKEN
+from config import TELEGRAM_BOT_TOKEN, AVAILABILITY_URL, CURRENCY_ID, API_HEADERS
 
 logger = logging.getLogger(__name__)
 
@@ -34,49 +36,52 @@ GOOGLE_API_KEY = os.environ.get("GOOGLE_GENERATIVE_AI_API_KEY", "")
 MAX_HISTORY = 10
 
 SYSTEM_PROMPT = f"""\
-Você é o "Assistente de Cotação de Diárias de Hotéis", um agente focado em consultar \
-a base de dados com diárias de hotéis do Omnibees.
+Você é o "Assistente de Cotação de Diárias de Hotéis", um agente que consulta preços \
+de hotéis do Omnibees em tempo real e monitora hotéis favoritos do usuário.
 
 Hoje é {datetime.now().strftime("%A, %d/%m/%Y")}.
 
-## Ferramentas disponíveis
-Você tem acesso a funções que consultam o banco de dados PostgreSQL com ~975 mil diárias \
-de 3.359 hotéis brasileiros. Use-as sempre que precisar de dados.
+## Como funciona
+- Preços de diárias são consultados em TEMPO REAL na API do Omnibees (dados sempre atualizados)
+- O usuário pode monitorar até 10 hotéis na watchlist (o sistema coleta preços 4x/dia e alerta mudanças)
+- Padrões de preço e histórico de variações só estão disponíveis para hotéis na watchlist
+- O catálogo tem ~3.300 hotéis brasileiros para busca e recomendação
 
-## Fluxo de trabalho
+## Ferramentas
 
-### Fase 1: Coleta
-Se a solicitação estiver incompleta, pergunte pelo que falta:
-- Nome do hotel (pode ser parcial, a busca é fuzzy)
-- Data de check-in
-- Data de check-out
+### Consulta em tempo real (qualquer hotel)
+1. buscar_hoteis — encontrar hotéis por nome, cidade, estado ou estrelas
+2. buscar_diarias — preços de diárias para um período (API em tempo real)
+3. comparar_hoteis — comparar 2-5 hotéis no mesmo período
+4. buscar_mais_baratos — hotéis mais baratos de uma cidade/estado (requer cidade ou estado)
+5. sugerir_datas — datas mais baratas de um hotel em um mês
+6. hotel_detalhes — amenities, quartos, descrição completa
+7. buscar_por_cidade — ranking de cidades por preço médio
+8. recomendar_hoteis — sugestão por perfil (familia, casal, negocios, economico)
+9. resumo_estatisticas — dados gerais da base
 
-### Fase 2: Consulta
-1. Se o usuário não sabe o nome exato, use buscar_hoteis para encontrar
-2. Use buscar_diarias para obter os preços do período
-3. Use buscar_padroes para análise de dia da semana / tendência
-4. Use buscar_watchlist para ver hotéis monitorados
-5. Use comparar_hoteis para comparar 2-3 hotéis no mesmo período
-6. Use hotel_detalhes para informações completas (amenities, quartos, descrição)
-7. Use buscar_mais_baratos para encontrar os hotéis mais baratos de uma região/período
-8. Use historico_precos para ver como o preço mudou ao longo do tempo
-9. Use buscar_por_cidade para ranking de cidades por preço médio
-10. Use resumo_estatisticas para dados gerais sobre a base
-11. Use adicionar_watchlist para monitorar um hotel (requer hotel_id, checkin, checkout)
-12. Use remover_watchlist para parar de monitorar (requer watch_id do buscar_watchlist)
-13. Use sugerir_datas para encontrar as datas mais baratas de um hotel em um mês
-14. Use recomendar_hoteis para sugerir hotéis por perfil (familia, casal, negocios, economico)
+### Watchlist (hotéis monitorados, máximo 10)
+10. adicionar_watchlist — começar a monitorar um hotel (com preço alvo opcional)
+11. remover_watchlist — parar de monitorar
+12. buscar_watchlist — listar hotéis monitorados
+13. buscar_padroes — análise de dia da semana (só watchlist)
+14. historico_precos — histórico de mudanças de preço (só watchlist)
 
-### Fase 3: Apresentação
+## Fluxo
+1. Se a solicitação estiver incompleta, pergunte pelo que falta (hotel, check-in, check-out)
+2. Se o usuário não sabe o nome exato, use buscar_hoteis primeiro
+3. Incentive o usuário a adicionar hotéis interessantes na watchlist para monitoramento
+
+## Apresentação
 - Valores sempre em R$ (BRL)
 - Diária do check-out NÃO é cobrada
 - Se alguma data não tiver preço, avise explicitamente
 - Use formatação Telegram (negrito com *, itálico com _)
 
 ## Regras
-- NÃO invente valores — se não está na base, não existe
-- NÃO pesquise na internet — sua fonte é apenas o banco de dados
-- NÃO pesquise passagens/transporte — apenas diárias
+- NÃO invente valores — use as ferramentas para obter dados reais
+- NÃO pesquise na internet — sua fonte é a API do Omnibees e o banco de dados
+- NÃO pesquise passagens/transporte — apenas diárias de hotéis
 - Seja conciso e direto
 """
 
@@ -308,25 +313,48 @@ def tool_buscar_hoteis(nome=None, cidade=None, estado=None, estrelas=None) -> st
     ])
 
 
+async def fetch_prices_realtime(hotel_ext_id: str, date_start: str, date_end: str) -> list[dict] | None:
+    url = f"{AVAILABILITY_URL}/{hotel_ext_id}/{CURRENCY_ID}/{date_start}/{date_end}/1/0/0"
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=API_HEADERS, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                if resp.status == 200:
+                    text = await resp.text()
+                    if text.strip():
+                        return json.loads(text)
+                return None
+    except (aiohttp.ClientError, json.JSONDecodeError) as e:
+        logger.warning(f"Erro ao consultar API Omnibees para hotel {hotel_ext_id}: {e}")
+        return None
+
+
 def tool_buscar_diarias(hotel_external_id: str, data_checkin: str, data_checkout: str) -> str:
+    import asyncio
+
     with get_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT id, name FROM hotels WHERE external_id = %s", (hotel_external_id,))
+            cur.execute("SELECT name FROM hotels WHERE external_id = %s", (hotel_external_id,))
             hotel = cur.fetchone()
-            if not hotel:
-                return _json({"erro": f"Hotel com ID {hotel_external_id} não encontrado."})
 
-            hotel_id, hotel_name = hotel
+    hotel_name = hotel[0] if hotel else f"Hotel {hotel_external_id}"
 
-            cur.execute("""
-                SELECT date, amount
-                FROM hotel_diarias
-                WHERE hotel_id = %s AND date >= %s AND date < %s AND amount > 0
-                ORDER BY date
-            """, (hotel_id, data_checkin, data_checkout))
-            rows = cur.fetchall()
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
 
-    diarias = [{"data": r[0].isoformat(), "valor": float(r[1])} for r in rows]
+    if loop and loop.is_running():
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor() as pool:
+            prices = pool.submit(asyncio.run, fetch_prices_realtime(hotel_external_id, data_checkin, data_checkout)).result()
+    else:
+        prices = asyncio.run(fetch_prices_realtime(hotel_external_id, data_checkin, data_checkout))
+
+    if not prices:
+        return _json({"hotel": hotel_name, "checkin": data_checkin, "checkout": data_checkout, "noites": 0, "total": 0, "diarias": [], "fonte": "API Omnibees (sem disponibilidade)"})
+
+    diarias = [{"data": p["date"].split("T")[0], "valor": float(p["price"])} for p in prices if p.get("price")]
+    diarias = [d for d in diarias if d["data"] >= data_checkin and d["data"] < data_checkout]
     total = sum(d["valor"] for d in diarias)
 
     return _json({
@@ -336,6 +364,7 @@ def tool_buscar_diarias(hotel_external_id: str, data_checkin: str, data_checkout
         "noites": len(diarias),
         "total": round(total, 2),
         "diarias": diarias,
+        "fonte": "API Omnibees (tempo real)",
     })
 
 
@@ -351,6 +380,10 @@ def tool_buscar_padroes(hotel_external_id: str, dias: int = 180) -> str:
 
             hotel_id, hotel_name = hotel
 
+            cur.execute("SELECT 1 FROM watched_hotels WHERE hotel_id = %s LIMIT 1", (hotel_id,))
+            if not cur.fetchone():
+                return _json({"erro": f"O hotel '{hotel_name}' não está na watchlist. Padrões de preço só estão disponíveis para hotéis monitorados. Use adicionar_watchlist primeiro."})
+
             cur.execute("""
                 SELECT extract(isodow FROM date)::int as dow,
                        avg(amount)::numeric(10,2), min(amount)::numeric(10,2),
@@ -363,7 +396,7 @@ def tool_buscar_padroes(hotel_external_id: str, dias: int = 180) -> str:
             rows = cur.fetchall()
 
     if not rows:
-        return _json({"hotel": hotel_name, "resultado": "Sem dados suficientes para análise."})
+        return _json({"hotel": hotel_name, "resultado": "Sem dados suficientes para análise (hotel pode ter sido adicionado recentemente)."})
 
     stats = [
         {"dia": weekday_names[r[0]], "media": float(r[1]), "min": float(r[2]), "max": float(r[3]), "amostras": r[4]}
@@ -406,42 +439,65 @@ def tool_buscar_watchlist() -> str:
 
 
 def tool_comparar_hoteis(hotel_ids: str, data_checkin: str, data_checkout: str) -> str:
+    import asyncio
+    import concurrent.futures
+
     ids = [x.strip() for x in hotel_ids.split(",") if x.strip()]
     if len(ids) < 2 or len(ids) > 5:
         return _json({"erro": "Informe entre 2 e 5 IDs de hotéis separados por vírgula."})
 
-    resultados = []
+    hotel_info = {}
     with get_connection() as conn:
         with conn.cursor() as cur:
             for ext_id in ids:
-                cur.execute("SELECT id, name, city, stars FROM hotels WHERE external_id = %s", (ext_id,))
-                hotel = cur.fetchone()
-                if not hotel:
-                    resultados.append({"external_id": ext_id, "erro": "Hotel não encontrado"})
-                    continue
+                cur.execute("SELECT name, city, stars FROM hotels WHERE external_id = %s", (ext_id,))
+                row = cur.fetchone()
+                if row:
+                    hotel_info[ext_id] = {"name": row[0], "city": row[1], "stars": row[2]}
 
-                hotel_id, name, city, stars = hotel
-                cur.execute("""
-                    SELECT date, amount FROM hotel_diarias
-                    WHERE hotel_id = %s AND date >= %s AND date < %s AND amount > 0
-                    ORDER BY date
-                """, (hotel_id, data_checkin, data_checkout))
-                rows = cur.fetchall()
+    async def fetch_all():
+        async with aiohttp.ClientSession() as session:
+            tasks = []
+            for ext_id in ids:
+                url = f"{AVAILABILITY_URL}/{ext_id}/{CURRENCY_ID}/{data_checkin}/{data_checkout}/1/0/0"
+                tasks.append(_fetch_one(session, ext_id, url))
+            return await asyncio.gather(*tasks)
 
-                if not rows:
-                    resultados.append({"hotel": name, "cidade": city, "estrelas": stars, "noites": 0, "total": 0})
-                    continue
+    async def _fetch_one(session, ext_id, url):
+        try:
+            async with session.get(url, headers=API_HEADERS, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                if resp.status == 200:
+                    text = await resp.text()
+                    if text.strip():
+                        return ext_id, json.loads(text)
+                return ext_id, None
+        except Exception:
+            return ext_id, None
 
-                valores = [float(r[1]) for r in rows]
-                resultados.append({
-                    "hotel": name, "cidade": city, "estrelas": stars,
-                    "noites": len(valores), "total": round(sum(valores), 2),
-                    "media_diaria": round(sum(valores) / len(valores), 2),
-                    "menor_diaria": round(min(valores), 2),
-                    "maior_diaria": round(max(valores), 2),
-                })
+    with concurrent.futures.ThreadPoolExecutor() as pool:
+        results = pool.submit(asyncio.run, fetch_all()).result()
 
-    return _json({"checkin": data_checkin, "checkout": data_checkout, "comparacao": resultados})
+    resultados = []
+    for ext_id, prices in results:
+        info = hotel_info.get(ext_id, {"name": f"Hotel {ext_id}", "city": None, "stars": None})
+        if not prices:
+            resultados.append({"hotel": info["name"], "cidade": info["city"], "estrelas": info["stars"], "noites": 0, "total": 0})
+            continue
+
+        valores = [float(p["price"]) for p in prices if p.get("price") and p["date"].split("T")[0] >= data_checkin and p["date"].split("T")[0] < data_checkout]
+        if not valores:
+            resultados.append({"hotel": info["name"], "cidade": info["city"], "estrelas": info["stars"], "noites": 0, "total": 0})
+            continue
+
+        resultados.append({
+            "hotel": info["name"], "cidade": info["city"], "estrelas": info["stars"],
+            "noites": len(valores), "total": round(sum(valores), 2),
+            "media_diaria": round(sum(valores) / len(valores), 2),
+            "menor_diaria": round(min(valores), 2),
+            "maior_diaria": round(max(valores), 2),
+        })
+
+    return _json({"checkin": data_checkin, "checkout": data_checkout, "comparacao": resultados, "fonte": "API Omnibees (tempo real)"})
 
 
 def tool_hotel_detalhes(hotel_external_id: str) -> str:
@@ -487,8 +543,12 @@ def tool_hotel_detalhes(hotel_external_id: str) -> str:
 
 
 def tool_buscar_mais_baratos(data_checkin: str, data_checkout: str, cidade=None, estado=None, limite: int = 5) -> str:
-    conditions = ["d.date >= %s", "d.date < %s", "d.amount > 0"]
-    params = [data_checkin, data_checkout]
+    import asyncio
+    import concurrent.futures
+
+    limite = min(limite or 5, 10)
+    conditions = []
+    params: list = []
 
     if cidade:
         conditions.append("h.city ILIKE %s")
@@ -497,37 +557,72 @@ def tool_buscar_mais_baratos(data_checkin: str, data_checkout: str, cidade=None,
         conditions.append("h.state ILIKE %s")
         params.append(f"%{estado}%")
 
-    limite = min(limite or 5, 10)
+    if not conditions:
+        return _json({"erro": "Informe pelo menos cidade ou estado para buscar os mais baratos."})
+
+    where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(f"""
-                SELECT h.external_id, h.name, h.city, h.state, h.stars,
-                       sum(d.amount)::numeric(10,2) as total,
-                       avg(d.amount)::numeric(10,2) as media,
-                       min(d.amount)::numeric(10,2) as menor,
-                       count(*) as noites
-                FROM hotel_diarias d
-                JOIN hotels h ON d.hotel_id = h.id
-                WHERE {' AND '.join(conditions)}
-                GROUP BY h.id, h.external_id, h.name, h.city, h.state, h.stars
-                HAVING count(*) >= 1
-                ORDER BY total ASC
-                LIMIT %s
-            """, params + [limite])
-            rows = cur.fetchall()
+                SELECT h.external_id, h.name, h.city, h.state, h.stars
+                FROM hotels h {where}
+                ORDER BY h.stars DESC NULLS LAST, h.name
+                LIMIT 30
+            """, params)
+            hotels = cur.fetchall()
 
-    if not rows:
+    if not hotels:
+        return _json({"resultado": "Nenhum hotel encontrado com esses filtros."})
+
+    async def fetch_all():
+        async with aiohttp.ClientSession() as session:
+            tasks = []
+            for h in hotels:
+                url = f"{AVAILABILITY_URL}/{h[0]}/{CURRENCY_ID}/{data_checkin}/{data_checkout}/1/0/0"
+                tasks.append(_fetch_one(session, h, url))
+            return await asyncio.gather(*tasks)
+
+    async def _fetch_one(session, hotel_row, url):
+        try:
+            async with session.get(url, headers=API_HEADERS, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                if resp.status == 200:
+                    text = await resp.text()
+                    if text.strip():
+                        return hotel_row, json.loads(text)
+                return hotel_row, None
+        except Exception:
+            return hotel_row, None
+
+    with concurrent.futures.ThreadPoolExecutor() as pool:
+        results = pool.submit(asyncio.run, fetch_all()).result()
+
+    ranked = []
+    for hotel_row, prices in results:
+        if not prices:
+            continue
+        valores = [float(p["price"]) for p in prices if p.get("price") and p["date"].split("T")[0] >= data_checkin and p["date"].split("T")[0] < data_checkout]
+        if not valores:
+            continue
+        ranked.append({
+            "external_id": hotel_row[0], "hotel": hotel_row[1], "cidade": hotel_row[2],
+            "estado": hotel_row[3], "estrelas": hotel_row[4],
+            "total": round(sum(valores), 2),
+            "media_diaria": round(sum(valores) / len(valores), 2),
+            "menor_diaria": round(min(valores), 2),
+            "noites": len(valores),
+        })
+
+    ranked.sort(key=lambda x: x["total"])
+
+    if not ranked:
         return _json({"resultado": "Nenhum hotel encontrado com disponibilidade nesse período."})
 
     return _json({
         "checkin": data_checkin, "checkout": data_checkout,
         "filtro_cidade": cidade, "filtro_estado": estado,
-        "hoteis": [
-            {"external_id": r[0], "hotel": r[1], "cidade": r[2], "estado": r[3], "estrelas": r[4],
-             "total": float(r[5]), "media_diaria": float(r[6]), "menor_diaria": float(r[7]), "noites": r[8]}
-            for r in rows
-        ],
+        "hoteis": ranked[:limite],
+        "fonte": "API Omnibees (tempo real)",
     })
 
 
@@ -540,6 +635,11 @@ def tool_historico_precos(hotel_external_id: str, limite: int = 15) -> str:
                 return _json({"erro": f"Hotel {hotel_external_id} não encontrado."})
 
             hotel_id, hotel_name = hotel
+
+            cur.execute("SELECT 1 FROM watched_hotels WHERE hotel_id = %s LIMIT 1", (hotel_id,))
+            if not cur.fetchone():
+                return _json({"erro": f"O hotel '{hotel_name}' não está na watchlist. Histórico de preços só está disponível para hotéis monitorados. Use adicionar_watchlist primeiro."})
+
             cur.execute("""
                 SELECT d.date, h.amount as preco_anterior, d.amount as preco_atual, h.captured_at
                 FROM hotel_precos_historico h
@@ -551,7 +651,7 @@ def tool_historico_precos(hotel_external_id: str, limite: int = 15) -> str:
             rows = cur.fetchall()
 
     if not rows:
-        return _json({"hotel": hotel_name, "resultado": "Sem histórico de mudanças de preço."})
+        return _json({"hotel": hotel_name, "resultado": "Sem histórico de mudanças de preço (hotel pode ter sido adicionado recentemente)."})
 
     changes = []
     for r in rows:
@@ -626,10 +726,18 @@ def tool_resumo_estatisticas() -> str:
     })
 
 
+MAX_WATCHLIST = 10
+
+
 def tool_adicionar_watchlist(hotel_external_id: str, data_checkin: str, data_checkout: str,
                              label: str = None, preco_alvo: float = None) -> str:
     with get_connection() as conn:
         with conn.cursor() as cur:
+            cur.execute("SELECT count(*) FROM watched_hotels", ())
+            count = cur.fetchone()[0]
+            if count >= MAX_WATCHLIST:
+                return _json({"erro": f"Limite de {MAX_WATCHLIST} hotéis na watchlist atingido. Remova um item antes de adicionar outro."})
+
             cur.execute("SELECT id, name FROM hotels WHERE external_id = %s", (hotel_external_id,))
             hotel = cur.fetchone()
             if not hotel:
@@ -687,6 +795,9 @@ def tool_remover_watchlist(watch_id: int) -> str:
 
 
 def tool_sugerir_datas(hotel_external_id: str, mes: int, ano: int, noites: int = 3, limite: int = 5) -> str:
+    import asyncio
+    import concurrent.futures
+
     noites = max(1, min(noites or 3, 14))
     limite = min(limite or 5, 10)
 
@@ -698,33 +809,32 @@ def tool_sugerir_datas(hotel_external_id: str, mes: int, ano: int, noites: int =
 
     with get_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT id, name FROM hotels WHERE external_id = %s", (hotel_external_id,))
+            cur.execute("SELECT name FROM hotels WHERE external_id = %s", (hotel_external_id,))
             hotel = cur.fetchone()
-            if not hotel:
-                return _json({"erro": f"Hotel {hotel_external_id} não encontrado."})
 
-            hotel_id, hotel_name = hotel
+    hotel_name = hotel[0] if hotel else f"Hotel {hotel_external_id}"
 
-            cur.execute("""
-                SELECT date, amount
-                FROM hotel_diarias
-                WHERE hotel_id = %s AND date >= %s AND date < %s AND amount > 0
-                ORDER BY date
-            """, (hotel_id, month_start, month_end))
-            rows = cur.fetchall()
+    with concurrent.futures.ThreadPoolExecutor() as pool:
+        raw_prices = pool.submit(asyncio.run, fetch_prices_realtime(hotel_external_id, month_start, month_end)).result()
 
-    if len(rows) < noites:
+    if not raw_prices:
+        return _json({"hotel": hotel_name, "resultado": f"Sem disponibilidade para {mes:02d}/{ano}."})
+
+    prices = sorted(
+        [(p["date"].split("T")[0], float(p["price"])) for p in raw_prices if p.get("price")],
+        key=lambda x: x[0],
+    )
+
+    if len(prices) < noites:
         return _json({"hotel": hotel_name, "resultado": f"Dados insuficientes para {mes:02d}/{ano}."})
-
-    prices = [(r[0], float(r[1])) for r in rows]
 
     windows = []
     for i in range(len(prices) - noites + 1):
         window = prices[i:i + noites]
         total = sum(p[1] for p in window)
         windows.append({
-            "checkin": window[0][0].isoformat(),
-            "checkout": window[-1][0].isoformat(),
+            "checkin": window[0][0],
+            "checkout": window[-1][0],
             "noites": noites,
             "total": round(total, 2),
             "media_diaria": round(total / noites, 2),
@@ -737,6 +847,7 @@ def tool_sugerir_datas(hotel_external_id: str, mes: int, ano: int, noites: int =
         "mes": f"{mes:02d}/{ano}",
         "noites": noites,
         "sugestoes": windows[:limite],
+        "fonte": "API Omnibees (tempo real)",
     })
 
 
@@ -965,15 +1076,15 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conversation_history.pop(chat_id, None)
     await update.message.reply_text(
         "🏨 *Assistente de Cotação de Diárias*\n\n"
-        "Posso consultar preços de mais de 3.000 hotéis brasileiros.\n\n"
+        "Consulto preços em *tempo real* de mais de 3.000 hotéis brasileiros.\n"
+        "Você pode monitorar até *10 hotéis* e receber alertas de preço.\n\n"
         "*Exemplos:*\n"
         "• _Quanto custa o Tauá de 10/04 a 15/04?_\n"
         "• _Hotel mais barato em Gramado em abril_\n"
         "• _Compare Salinas Maragogi com Cana Brava_\n"
-        "• _O que tem no Fasano? Quais amenities?_\n"
-        "• _Monitore o Tauá de 01/06 a 05/06_\n"
-        "• _Qual o melhor dia da semana pro Japaratinga?_\n"
-        "• _Cidades mais baratas na Bahia_\n\n"
+        "• _Monitore o Tauá de 01/06 a 05/06 com alvo de R$500_\n"
+        "• _Recomende hotéis para família em Alagoas_\n"
+        "• _Qual a melhor data pro Japaratinga em julho?_\n\n"
         "*Comandos:*\n"
         "/relatorio — Resumo dos hotéis monitorados\n"
         "/reset — Reiniciar conversa\n",

@@ -37,7 +37,7 @@ def cmd_status(args):
 def cmd_prices(args):
     from omnibees_price_scraper import run
     import asyncio
-    asyncio.run(run(args.hotels, args.months, args.workers, args.delay, args.batch_size, args.resume))
+    asyncio.run(run(args.hotels, args.months, args.workers, args.delay, args.batch_size, args.resume, args.watchlist_only))
 
 
 def cmd_scrape(args):
@@ -363,6 +363,7 @@ def main():
     p_prices.add_argument("--delay", type=float, default=0.5, help="Delay entre requests (default: 0.5)")
     p_prices.add_argument("--batch-size", type=int, default=250, help="Hotéis por lote (default: 250)")
     p_prices.add_argument("--resume", action="store_true", help="Retomar do último checkpoint de preços")
+    p_prices.add_argument("--watchlist-only", action="store_true", help="Coletar apenas hotéis da watchlist")
 
     p_scrape = sub.add_parser("scrape", help="Scrape de chains e hotéis do Omnibees")
     p_scrape.add_argument("--start", type=int, default=0, help="ID inicial (default: 0)")
